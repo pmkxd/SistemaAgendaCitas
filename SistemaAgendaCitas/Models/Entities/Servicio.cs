@@ -20,5 +20,6 @@ namespace SistemaAgendaCitas.Models.Entities
         public double Precio { get; set; }
         [Required(ErrorMessage = " Activo es requerido.")]
         public bool Activo { get; set; }
+        public ICollection<Cita> Citas { get; set; } = new List<Cita>();
     }
 }
