@@ -9,12 +9,10 @@ namespace SistemaAgendaCitas.Models.Entities
 
         [Required(ErrorMessage = "Cliente es requerido.")]
         public int ClienteId { get; set; }
-
         public Cliente Cliente { get; set; } = null!;
 
         [Required(ErrorMessage = "Servicio es requerido.")]
         public int ServicioId { get; set; }
-
         public Servicio Servicio { get; set; } = null!;
 
         [Required(ErrorMessage = "Fecha es requerida.")]
