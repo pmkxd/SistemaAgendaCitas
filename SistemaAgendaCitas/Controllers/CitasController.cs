@@ -50,6 +50,7 @@ namespace SistemaAgendaCitas.Controllers
         // GET: Citas/Create
         public IActionResult Create()
         {
+
             var viewModel = new AddCitaViewModel
             {
 
@@ -72,6 +73,11 @@ namespace SistemaAgendaCitas.Controllers
             };
 
             return View(viewModel);
+
+            ViewData["ClienteId"] = new SelectList(_context.Clientes, "Id", "Nombre");
+            ViewData["ServicioId"] = new SelectList(_context.Servicios, "Id", "Nombre");
+            return View();
+
         }
 
 
@@ -82,6 +88,10 @@ namespace SistemaAgendaCitas.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(AddCitaViewModel viewModel)
         {
+            // Excluir las propiedades de navegación de la validación
+            ModelState.Remove("Cliente");
+            ModelState.Remove("Servicio");
+
             if (ModelState.IsValid)
             {
                 var cita = new Cita
@@ -99,6 +109,7 @@ namespace SistemaAgendaCitas.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
+
             // Si hay errores, recargar combos
             viewModel.Clientes = _context.Clientes
                 .Select(c => new SelectListItem
@@ -115,6 +126,10 @@ namespace SistemaAgendaCitas.Controllers
                 }).ToList();
 
             return View(viewModel);
+
+            ViewData["ClienteId"] = new SelectList(_context.Clientes, "Id", "Nombre", cita.ClienteId);
+            ViewData["ServicioId"] = new SelectList(_context.Servicios, "Id", "Nombre", cita.ServicioId);
+            return View(cita);
         }
 
 
