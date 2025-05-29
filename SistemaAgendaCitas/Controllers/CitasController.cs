@@ -49,8 +49,8 @@ namespace SistemaAgendaCitas.Controllers
         // GET: Citas/Create
         public IActionResult Create()
         {
-            ViewData["ClienteId"] = new SelectList(_context.Clientes, "Id", "Nombre");
-            ViewData["ServicioId"] = new SelectList(_context.Servicios, "Id", "Nombre");
+            ViewData["ClienteId"] = new SelectList(_context.Clientes, "Id", "Apellido");
+            ViewData["ServicioId"] = new SelectList(_context.Servicios, "Id", "Descripcion");
             return View();
         }
 
@@ -67,10 +67,8 @@ namespace SistemaAgendaCitas.Controllers
                 await _context.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));
             }
-
-            // Si hay error, recargar los combos
-            ViewData["ClienteId"] = new SelectList(_context.Clientes, "Id", "Nombre", cita.ClienteId);
-            ViewData["ServicioId"] = new SelectList(_context.Servicios, "Id", "Nombre", cita.ServicioId);
+            ViewData["ClienteId"] = new SelectList(_context.Clientes, "Id", "Apellido", cita.ClienteId);
+            ViewData["ServicioId"] = new SelectList(_context.Servicios, "Id", "Descripcion", cita.ServicioId);
             return View(cita);
         }
 

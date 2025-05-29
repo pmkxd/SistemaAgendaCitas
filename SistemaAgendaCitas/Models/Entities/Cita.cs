@@ -24,8 +24,7 @@ namespace SistemaAgendaCitas.Models.Entities
         public TimeSpan Hora { get; set; }
 
         [Required(ErrorMessage = "Estado es requerido.")]
-        [StringLength(20, ErrorMessage = "El estado debe tener un máximo de 20 caracteres.")]
-        public string Estado { get; set; } = "Pendiente";
+        public EstadoCita Estado { get; set; } = EstadoCita.Pendiente;
 
         [StringLength(250, ErrorMessage = "Los comentarios no deben superar los 250 caracteres.")]
         public string? Comentarios { get; set; }

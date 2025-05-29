@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+
+
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.7" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.11">
@@ -17,6 +19,14 @@
     <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Design" Version="8.0.7" />
     <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Templating" Version="8.0.7" />
     <PackageReference Include="Microsoft.VisualStudio.Web.CodeGeneration.Utils" Version="8.0.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Views\Citas\Create.cshtml" />
+    <None Include="Views\Citas\Delete.cshtml" />
+    <None Include="Views\Citas\Details.cshtml" />
+    <None Include="Views\Citas\Edit.cshtml" />
+    <None Include="Views\Citas\Index.cshtml" />
   </ItemGroup>
 
 </Project>
