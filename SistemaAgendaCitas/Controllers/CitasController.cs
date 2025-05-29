@@ -127,9 +127,7 @@ namespace SistemaAgendaCitas.Controllers
 
             return View(viewModel);
 
-            ViewData["ClienteId"] = new SelectList(_context.Clientes, "Id", "Nombre", cita.ClienteId);
-            ViewData["ServicioId"] = new SelectList(_context.Servicios, "Id", "Nombre", cita.ServicioId);
-            return View(cita);
+          
         }
 
 

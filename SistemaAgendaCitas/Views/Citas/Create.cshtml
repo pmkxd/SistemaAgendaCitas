@@ -16,9 +16,6 @@
 
                 <select asp-for="ClienteId" asp-items="Model.Clientes"></select>
 
-                <select asp-for="ClienteId" class="form-control" asp-items="ViewBag.ClienteId">
-                    <option value="">-- Seleccione un cliente --</option>
-                </select>
                 <span asp-validation-for="ClienteId" class="text-danger"></span>
 
             </div>
@@ -28,9 +25,6 @@
 
                 <select asp-for="ServicioId" asp-items="Model.Servicios"></select>
 
-                <select asp-for="ServicioId" class="form-control" asp-items="ViewBag.ServicioId">
-                    <option value="">-- Seleccione un servicio --</option>
-                </select>
                 <span asp-validation-for="ServicioId" class="text-danger"></span>
 
             </div>
