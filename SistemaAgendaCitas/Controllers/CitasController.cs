@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using SistemaAgendaCitas.Data;
+using SistemaAgendaCitas.Models;
 using SistemaAgendaCitas.Models.Entities;
 using SistemaAgendaCitas.Models.ViewModels;
 using System;
@@ -258,6 +259,29 @@ namespace SistemaAgendaCitas.Controllers
         private bool CitaExists(int id)
         {
             return _context.Citas.Any(e => e.Id == id);
+        }
+        public IActionResult Calendario()
+        {
+            return View();
+        }
+        [HttpGet]
+        public JsonResult ObtenerCitas()
+        {
+            var citas = _context.Citas
+                .Include(c => c.Cliente)
+                .Include(c => c.Servicio)
+
+
+                .Select(c => new {
+                    id = c.Id,
+                    title = c.Cliente.Nombre + " - " + c.Servicio.Nombre,
+                    start = c.Fecha.Add(c.Hora).ToString("s"), // formato ISO 8601
+                    allDay = false
+                })
+                .ToList();
+
+
+            return Json(citas);
         }
     }
 }

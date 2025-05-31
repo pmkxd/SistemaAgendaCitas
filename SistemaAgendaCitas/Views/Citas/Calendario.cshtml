@@ -1,0 +1,35 @@
+﻿@{
+    ViewData["Title"] = "Calendario de Citas";
+    Layout = "~/Views/Shared/_Layout.cshtml"; // Ajusta si usas otro layout
+}
+
+<!-- Estilos de FullCalendar -->
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css" rel="stylesheet" />
+
+<h2>@ViewData["Title"]</h2>
+
+<div id='calendar'></div>
+
+<!-- Scripts de FullCalendar -->
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var calendarEl = document.getElementById('calendar');
+
+            var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek'
+        },
+        locale: 'es',
+        events: '/Citas/ObtenerCitas'
+    });
+
+
+        calendar.render();
+    });
+</script>
