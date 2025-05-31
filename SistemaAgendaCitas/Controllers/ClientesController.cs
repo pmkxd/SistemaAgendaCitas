@@ -8,6 +8,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using X.PagedList;
+using X.PagedList.Extensions;
+
 
 namespace SistemaAgendaCitas.Controllers
 {
@@ -21,9 +24,28 @@ namespace SistemaAgendaCitas.Controllers
         }
 
         // GET: Clientes
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string orden, int? pagina)
         {
-            return View(await _context.Clientes.ToListAsync());
+            var clientes = _context.Clientes.AsQueryable();
+
+            ViewData["OrdenActual"] = orden;
+            ViewData["OrdenPorNombre"] = string.IsNullOrEmpty(orden) ? "nombre_desc" : "";
+            ViewData["OrdenPorFecha"] = orden == "fecha" ? "fecha_desc" : "fecha";
+
+            // Ordenamiento
+            clientes = orden switch
+            {
+                "nombre_desc" => clientes.OrderByDescending(c => c.Nombre.ToLower()),
+                "fecha" => clientes.OrderBy(c => c.FechaRegistro),
+                "fecha_desc" => clientes.OrderByDescending(c => c.FechaRegistro),
+                _ => clientes.OrderBy(c => c.Nombre.ToLower())
+            };
+
+            // Paginación
+            int tamanioPagina = 10;
+            int numeroPagina = pagina ?? 1;
+
+            return View(clientes.ToPagedList(numeroPagina, tamanioPagina));
         }
 
         // GET: Clientes/Details/5
@@ -64,18 +86,27 @@ namespace SistemaAgendaCitas.Controllers
         {
             if (ModelState.IsValid)
             {
-                var cliente = new Cliente
+                // Validar que no exista otro cliente con el mismo email
+                bool emailExiste = await _context.Clientes.AnyAsync(c => c.Email == viewModel.Email);
+                if (emailExiste)
                 {
-                    Nombre = viewModel.Nombre,
-                    Apellido = viewModel.Apellido,
-                    Email = viewModel.Email,
-                    Telefono = viewModel.Telefono,
-                    FechaRegistro = viewModel.FechaRegistro
-                };
+                    ModelState.AddModelError("Email", "El email ya está registrado.");
+                }
+                else
+                {
+                    var cliente = new Cliente
+                    {
+                        Nombre = viewModel.Nombre,
+                        Apellido = viewModel.Apellido,
+                        Email = viewModel.Email,
+                        Telefono = viewModel.Telefono,
+                        FechaRegistro = viewModel.FechaRegistro
+                    };
 
-                _context.Clientes.Add(cliente);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                    _context.Clientes.Add(cliente);
+                    await _context.SaveChangesAsync();
+                    return RedirectToAction(nameof(Index));
+                }
             }
 
             return View(viewModel);
@@ -115,17 +146,28 @@ namespace SistemaAgendaCitas.Controllers
 
             if (ModelState.IsValid)
             {
-                var cliente = await _context.Clientes.FindAsync(id);
-                if (cliente == null) return NotFound();
+                // Validar que el nuevo email no esté registrado por otro cliente
+                bool emailExiste = await _context.Clientes
+                    .AnyAsync(c => c.Email == viewModel.Email && c.Id != id);
 
-                cliente.Nombre = viewModel.Nombre;
-                cliente.Apellido = viewModel.Apellido;
-                cliente.Email = viewModel.Email;
-                cliente.Telefono = viewModel.Telefono;
-                cliente.FechaRegistro = viewModel.FechaRegistro;
+                if (emailExiste)
+                {
+                    ModelState.AddModelError("Email", "El email ya está registrado por otro cliente.");
+                }
+                else
+                {
+                    var cliente = await _context.Clientes.FindAsync(id);
+                    if (cliente == null) return NotFound();
 
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                    cliente.Nombre = viewModel.Nombre;
+                    cliente.Apellido = viewModel.Apellido;
+                    cliente.Email = viewModel.Email;
+                    cliente.Telefono = viewModel.Telefono;
+                    cliente.FechaRegistro = viewModel.FechaRegistro;
+
+                    await _context.SaveChangesAsync();
+                    return RedirectToAction(nameof(Index));
+                }
             }
 
             return View(viewModel);
@@ -156,11 +198,18 @@ namespace SistemaAgendaCitas.Controllers
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var cliente = await _context.Clientes.FindAsync(id);
-            if (cliente != null)
+            if (cliente == null) return NotFound();
+
+            // Verificar si el cliente tiene citas asociadas
+            bool tieneCitas = await _context.Citas.AnyAsync(c => c.ClienteId == id);
+
+            if (tieneCitas)
             {
-                _context.Clientes.Remove(cliente);
+                TempData["Error"] = "No se puede eliminar el cliente porque tiene citas asociadas.";
+                return RedirectToAction(nameof(Index));
             }
 
+            _context.Clientes.Remove(cliente);
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
