@@ -1,0 +1,36 @@
+﻿@using SistemaAgendaCitas.Models.ViewModels
+@*
+    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+*@
+@{
+}
+@model CitasPorPeriodoViewModel
+
+<h2>Reporte de Citas por Período</h2>
+
+<form asp-action="Reportes" asp-controller="Citas" method="get">
+    <label>Desde:</label>
+    <input type="date" name="fechaInicio" value="@Model.FechaInicio.ToString("yyyy-MM-dd")" />
+    <label>Hasta:</label>
+    <input type="date" name="fechaFin" value="@Model.FechaFin.ToString("yyyy-MM-dd")" />
+    <button type="submit">Filtrar</button>
+</form>
+
+@if (Model?.FechaInicio != DateTime.MinValue)
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Estado</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>Pendientes</td><td>@Model.Pendientes</td></tr>
+            <tr><td>Confirmadas</td><td>@Model.Confirmadas</td></tr>
+            <tr><td>Completadas</td><td>@Model.Completadas</td></tr>
+            <tr><td>Canceladas</td><td>@Model.Canceladas</td></tr>
+        </tbody>
+    </table>
+}
+
