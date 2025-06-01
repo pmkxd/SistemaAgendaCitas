@@ -367,3 +367,4 @@ FodyWeavers.xsd
 *.sqlite
 *.db-shm
 *.db-wal
+/SistemaAgendaCitas/AgendaCitas.db

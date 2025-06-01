@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using SistemaAgendaCitas.Data;
+using SistemaAgendaCitas.Models;
 using SistemaAgendaCitas.Models.Entities;
 using SistemaAgendaCitas.Models.ViewModels;
 using System;
@@ -21,9 +22,22 @@ namespace SistemaAgendaCitas.Controllers
         }
 
         // GET: Servicios
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string estado)
         {
-            return View(await _context.Servicios.ToListAsync());
+            ViewData["EstadoActual"] = estado;
+
+            var servicios = _context.Servicios.AsQueryable();
+
+            // Filtrar por estado si se especifica
+            if (!string.IsNullOrEmpty(estado))
+            {
+                if (estado == "activos")
+                    servicios = servicios.Where(s => s.Activo);
+                else if (estado == "inactivos")
+                    servicios = servicios.Where(s => !s.Activo);
+            }
+
+            return View(await servicios.ToListAsync());
         }
 
         // GET: Servicios/Details/5
@@ -156,12 +170,22 @@ namespace SistemaAgendaCitas.Controllers
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
             var servicio = await _context.Servicios.FindAsync(id);
-            if (servicio != null)
+            if (servicio == null) return NotFound();
+
+            // Verificar si tiene citas pendientes
+            bool tieneCitasPendientes = await _context.Citas
+                .AnyAsync(c => c.ServicioId == id && c.Estado == EstadoCita.Pendiente);
+
+            if (tieneCitasPendientes)
             {
-                _context.Servicios.Remove(servicio);
+                TempData["Error"] = "No se puede eliminar el servicio porque tiene citas pendientes asociadas.";
+                return RedirectToAction(nameof(Index));
             }
 
+            // Eliminación lógica: marcar como inactivo
+            servicio.Activo = false;
             await _context.SaveChangesAsync();
+
             return RedirectToAction(nameof(Index));
         }
 
