@@ -25,8 +25,12 @@ namespace SistemaAgendaCitas.Models.Entities
 
         [Required(ErrorMessage = "Estado es requerido.")]
         public EstadoCita Estado { get; set; } = EstadoCita.Pendiente;
+        public DateTime? FechaCambioEstado { get; set; }
 
         [StringLength(250, ErrorMessage = "Los comentarios no deben superar los 250 caracteres.")]
         public string? Comentarios { get; set; }
+
+        
+
     }
 }
