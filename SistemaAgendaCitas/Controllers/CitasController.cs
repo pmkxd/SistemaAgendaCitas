@@ -23,11 +23,45 @@ namespace SistemaAgendaCitas.Controllers
         }
 
         // GET: Citas
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(DateTime? fecha, int? clienteId, EstadoCita? estado)
         {
-            var applicationDbContext = _context.Citas.Include(c => c.Cliente).Include(c => c.Servicio);
-            return View(await applicationDbContext.ToListAsync());
+            var clientesLista = await _context.Clientes
+                .Select(c => new SelectListItem
+                {
+                    Value = c.Id.ToString(),
+                    Text = c.Apellido
+                }).ToListAsync();
+
+            var estadosLista = Enum.GetValues(typeof(EstadoCita))
+                .Cast<EstadoCita>()
+                .Select(e => new SelectListItem
+                {
+                    Value = ((int)e).ToString(),
+                    Text = e.ToString()
+                }).ToList();
+
+            // Establecer selección activa
+            ViewBag.Clientes = new SelectList(clientesLista, "Value", "Text", clienteId?.ToString());
+            ViewBag.Estados = new SelectList(estadosLista, "Value", "Text", estado?.ToString());
+
+            var citas = _context.Citas
+                .Include(c => c.Cliente)
+                .Include(c => c.Servicio)
+                .AsQueryable();
+
+            if (fecha.HasValue)
+                citas = citas.Where(c => c.Fecha.Date == fecha.Value.Date);
+
+            if (clienteId.HasValue)
+                citas = citas.Where(c => c.ClienteId == clienteId.Value);
+
+            if (estado.HasValue)
+                citas = citas.Where(c => c.Estado == estado.Value);
+
+            return View(await citas.ToListAsync());
         }
+
+
 
         // GET: Citas/Details/5
         public async Task<IActionResult> Details(int? id)
@@ -90,9 +124,20 @@ namespace SistemaAgendaCitas.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(AddCitaViewModel viewModel)
         {
-            // Excluir las propiedades de navegación de la validación
+            // Excluir propiedades de navegación si existen
             ModelState.Remove("Cliente");
             ModelState.Remove("Servicio");
+
+            // Validar disponibilidad de horario (solapamiento)
+            bool existeSolapamiento = await _context.Citas.AnyAsync(c =>
+    c.Fecha == viewModel.Fecha &&
+    c.Hora == viewModel.Hora);
+
+
+            if (existeSolapamiento)
+            {
+                ModelState.AddModelError(string.Empty, "Ya existe una cita registrada para el mismo servicio, fecha y hora.");
+            }
 
             if (ModelState.IsValid)
             {
@@ -111,65 +156,53 @@ namespace SistemaAgendaCitas.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-
-            // Si hay errores, recargar combos
-            viewModel.Clientes = _context.Clientes
+            // Si hay errores, recargar listas desplegables
+            viewModel.Clientes = await _context.Clientes
                 .Select(c => new SelectListItem
                 {
                     Value = c.Id.ToString(),
                     Text = c.Nombre
-                }).ToList();
+                }).ToListAsync();
 
-            viewModel.Servicios = _context.Servicios
+            viewModel.Servicios = await _context.Servicios
                 .Select(s => new SelectListItem
                 {
                     Value = s.Id.ToString(),
                     Text = s.Nombre
-                }).ToList();
+                }).ToListAsync();
 
             return View(viewModel);
-
-          
         }
+
 
 
         // GET: Citas/Edit/5
         [HttpGet]
-        public async Task<IActionResult> Edit(int id)
+        public async Task<IActionResult> Edit(int? id)
         {
-            var cita = await _context.Citas.FindAsync(id);
-            if (cita == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var viewModel = new AddCitaViewModel
+            var cita = await _context.Citas
+    .Include(c => c.Cliente)
+    .Include(c => c.Servicio)
+    .FirstOrDefaultAsync(c => c.Id == id);
+
+            if (cita == null) return NotFound();
+
+            var viewModel = new EditCitaViewModel
             {
                 Id = cita.Id,
-                ClienteId = cita.ClienteId,
-                ServicioId = cita.ServicioId,
                 Fecha = cita.Fecha,
                 Hora = cita.Hora,
                 Estado = cita.Estado,
                 Comentarios = cita.Comentarios,
-
-                Clientes = _context.Clientes
-                    .Select(c => new SelectListItem
-                    {
-                        Value = c.Id.ToString(),
-                        Text = c.Nombre
-                    }).ToList(),
-
-                Servicios = _context.Servicios
-                    .Select(s => new SelectListItem
-                    {
-                        Value = s.Id.ToString(),
-                        Text = s.Nombre
-                    }).ToList()
+                ClienteNombre = cita.Cliente.Nombre,
+                ServicioNombre = cita.Servicio.Nombre
             };
 
             return View(viewModel);
         }
+
 
 
         // POST: Citas/Edit/5
@@ -177,49 +210,79 @@ namespace SistemaAgendaCitas.Controllers
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, AddCitaViewModel viewModel)
+        public async Task<IActionResult> Edit(int id, EditCitaViewModel viewModel)
         {
-            if (id != viewModel.Id)
-            {
-                return NotFound();
-            }
+            if (id != viewModel.Id) return NotFound();
 
             if (ModelState.IsValid)
             {
                 var cita = await _context.Citas.FindAsync(id);
-                if (cita == null)
+                if (cita == null) return NotFound();
+
+                // Validar solapamiento de fecha y hora
+                bool existeSolapamiento = await _context.Citas.AnyAsync(c =>
+                    c.Id != viewModel.Id &&
+                    c.Fecha == viewModel.Fecha &&
+                    c.Hora == viewModel.Hora);
+
+                if (existeSolapamiento)
                 {
-                    return NotFound();
+                    ModelState.AddModelError(string.Empty, "Ya existe una cita registrada para esa fecha y hora.");
                 }
+                else
+                {
+                    // Validar si se intenta cambiar de estado
+                    bool cambioEstado = cita.Estado != viewModel.Estado;
+                    if (cambioEstado)
+                    {
+                        bool puedeCancelar = cita.Estado == EstadoCita.Pendiente && viewModel.Estado == EstadoCita.Cancelada;
+                        bool puedeCompletar = (cita.Estado == EstadoCita.Pendiente || cita.Estado == EstadoCita.Confirmada)
+                            && viewModel.Estado == EstadoCita.Completada;
 
-                cita.ClienteId = viewModel.ClienteId;
-                cita.ServicioId = viewModel.ServicioId;
-                cita.Fecha = viewModel.Fecha;
-                cita.Hora = viewModel.Hora;
-                cita.Estado = viewModel.Estado;
-                cita.Comentarios = viewModel.Comentarios;
+                        if (!puedeCancelar && !puedeCompletar)
+                        {
+                            ModelState.AddModelError("", "Solo puedes cancelar citas pendientes o completar citas pendientes/confirmadas.");
+                        }
+                        else
+                        {
+                            cita.Estado = viewModel.Estado;
+                            cita.FechaCambioEstado = DateTime.Now;
+                        }
+                    }
 
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                    // Si no hay errores de validación extra
+                    if (ModelState.ErrorCount == 0)
+                    {
+                        cita.Fecha = viewModel.Fecha;
+                        cita.Hora = viewModel.Hora;
+                        cita.Comentarios = viewModel.Comentarios;
+
+                        await _context.SaveChangesAsync();
+                        return RedirectToAction(nameof(Index));
+                    }
+                }
             }
 
-            // Si falla validación, recargar combos
-            viewModel.Clientes = _context.Clientes
-                .Select(c => new SelectListItem
-                {
-                    Value = c.Id.ToString(),
-                    Text = c.Apellido + ", " + c.Nombre
-                }).ToList();
+            // Restaurar valores visibles si hubo errores
+            var citaCompleta = await _context.Citas
+                .Include(c => c.Cliente)
+                .Include(c => c.Servicio)
+                .FirstOrDefaultAsync(c => c.Id == viewModel.Id);
 
-            viewModel.Servicios = _context.Servicios
-                .Select(s => new SelectListItem
-                {
-                    Value = s.Id.ToString(),
-                    Text = s.Nombre
-                }).ToList();
+            if (citaCompleta != null)
+            {
+                viewModel.ClienteNombre = $"{citaCompleta.Cliente.Nombre} ";
+                viewModel.ServicioNombre = citaCompleta.Servicio.Nombre;
+            }
+
+            viewModel.Comentarios ??= "";
 
             return View(viewModel);
         }
+
+
+
+
 
 
         // GET: Citas/Delete/5
@@ -261,6 +324,78 @@ namespace SistemaAgendaCitas.Controllers
         {
             return _context.Citas.Any(e => e.Id == id);
         }
+
+
+        [HttpGet]
+        public async Task<IActionResult> CambiarEstado(int id)
+        {
+            var cita = await _context.Citas
+                .Include(c => c.Cliente)
+                .Include(c => c.Servicio)
+                .FirstOrDefaultAsync(c => c.Id == id);
+
+            if (cita == null) return NotFound();
+
+            var viewModel = new CambiarEstadoCitaViewModel
+            {
+                Id = cita.Id,
+                ClienteNombre = cita.Cliente.Nombre,
+                ServicioNombre = cita.Servicio.Nombre,
+                EstadoActual = cita.Estado
+            };
+
+            return View(viewModel);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CambiarEstado(CambiarEstadoCitaViewModel viewModel)
+        {
+            if (!ModelState.IsValid)
+            {
+                await CargarDatosEstadoCita(viewModel);
+                return View(viewModel);
+            }
+
+            var cita = await _context.Citas.FindAsync(viewModel.Id);
+            if (cita == null) return NotFound();
+
+            // Validar estados permitidos para cambio
+            bool puedeCancelar = cita.Estado == EstadoCita.Pendiente && viewModel.NuevoEstado == EstadoCita.Cancelada;
+            bool puedeCompletar = (cita.Estado == EstadoCita.Pendiente || cita.Estado == EstadoCita.Confirmada) && viewModel.NuevoEstado == EstadoCita.Completada;
+
+            if (!puedeCancelar && !puedeCompletar)
+            {
+                ModelState.AddModelError("", "Solo puedes cancelar citas pendientes o completar citas pendientes/confirmadas.");
+                await CargarDatosEstadoCita(viewModel);
+                return View(viewModel);
+            }
+
+            cita.Estado = viewModel.NuevoEstado;
+            cita.FechaCambioEstado = DateTime.Now;
+
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
+        }
+
+        private async Task CargarDatosEstadoCita(CambiarEstadoCitaViewModel viewModel)
+        {
+            var citaOriginal = await _context.Citas
+                .Include(c => c.Cliente)
+                .Include(c => c.Servicio)
+                .FirstOrDefaultAsync(c => c.Id == viewModel.Id);
+
+            if (citaOriginal != null)
+            {
+                viewModel.ClienteNombre = citaOriginal.Cliente.Nombre + " " + citaOriginal.Cliente.Apellido;
+                viewModel.ServicioNombre = citaOriginal.Servicio.Nombre;
+                viewModel.EstadoActual = citaOriginal.Estado;
+            }
+        }
+
+
+
+
         public IActionResult Calendario()
         {
             return View();
@@ -284,5 +419,6 @@ namespace SistemaAgendaCitas.Controllers
 
             return Json(citas);
         }
+
     }
 }
