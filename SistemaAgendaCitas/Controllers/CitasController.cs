@@ -219,7 +219,7 @@ namespace SistemaAgendaCitas.Controllers
                 var cita = await _context.Citas.FindAsync(id);
                 if (cita == null) return NotFound();
 
-                // Validar solapamiento de fecha/hora
+                // Validar solapamiento de fecha y hora
                 bool existeSolapamiento = await _context.Citas.AnyAsync(c =>
                     c.Id != viewModel.Id &&
                     c.Fecha == viewModel.Fecha &&
@@ -228,37 +228,58 @@ namespace SistemaAgendaCitas.Controllers
                 if (existeSolapamiento)
                 {
                     ModelState.AddModelError(string.Empty, "Ya existe una cita registrada para esa fecha y hora.");
-                    return View(viewModel);
                 }
-
-                // Validar cambio de estado
-                bool cambioEstado = cita.Estado != viewModel.Estado;
-                if (cambioEstado)
+                else
                 {
-                    bool puedeCancelar = cita.Estado == EstadoCita.Pendiente && viewModel.Estado == EstadoCita.Cancelada;
-                    bool puedeCompletar = (cita.Estado == EstadoCita.Pendiente || cita.Estado == EstadoCita.Confirmada) && viewModel.Estado == EstadoCita.Completada;
-
-                    if (!puedeCancelar && !puedeCompletar)
+                    // Validar si se intenta cambiar de estado
+                    bool cambioEstado = cita.Estado != viewModel.Estado;
+                    if (cambioEstado)
                     {
-                        ModelState.AddModelError("", "Solo puedes cancelar citas pendientes o completar citas pendientes/confirmadas.");
-                        return View(viewModel);
+                        bool puedeCancelar = cita.Estado == EstadoCita.Pendiente && viewModel.Estado == EstadoCita.Cancelada;
+                        bool puedeCompletar = (cita.Estado == EstadoCita.Pendiente || cita.Estado == EstadoCita.Confirmada)
+                            && viewModel.Estado == EstadoCita.Completada;
+
+                        if (!puedeCancelar && !puedeCompletar)
+                        {
+                            ModelState.AddModelError("", "Solo puedes cancelar citas pendientes o completar citas pendientes/confirmadas.");
+                        }
+                        else
+                        {
+                            cita.Estado = viewModel.Estado;
+                            cita.FechaCambioEstado = DateTime.Now;
+                        }
                     }
 
-                    cita.Estado = viewModel.Estado;
-                    cita.FechaCambioEstado = DateTime.Now;
+                    // Si no hay errores de validación extra
+                    if (ModelState.ErrorCount == 0)
+                    {
+                        cita.Fecha = viewModel.Fecha;
+                        cita.Hora = viewModel.Hora;
+                        cita.Comentarios = viewModel.Comentarios;
+
+                        await _context.SaveChangesAsync();
+                        return RedirectToAction(nameof(Index));
+                    }
                 }
-
-                // Actualizar campos restantes
-                cita.Fecha = viewModel.Fecha;
-                cita.Hora = viewModel.Hora;
-                cita.Comentarios = viewModel.Comentarios;
-
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
             }
+
+            // Restaurar valores visibles si hubo errores
+            var citaCompleta = await _context.Citas
+                .Include(c => c.Cliente)
+                .Include(c => c.Servicio)
+                .FirstOrDefaultAsync(c => c.Id == viewModel.Id);
+
+            if (citaCompleta != null)
+            {
+                viewModel.ClienteNombre = $"{citaCompleta.Cliente.Nombre} ";
+                viewModel.ServicioNombre = citaCompleta.Servicio.Nombre;
+            }
+
+            viewModel.Comentarios ??= "";
 
             return View(viewModel);
         }
+
 
 
 
@@ -330,7 +351,10 @@ namespace SistemaAgendaCitas.Controllers
         public async Task<IActionResult> CambiarEstado(CambiarEstadoCitaViewModel viewModel)
         {
             if (!ModelState.IsValid)
+            {
+                await CargarDatosEstadoCita(viewModel);
                 return View(viewModel);
+            }
 
             var cita = await _context.Citas.FindAsync(viewModel.Id);
             if (cita == null) return NotFound();
@@ -342,16 +366,33 @@ namespace SistemaAgendaCitas.Controllers
             if (!puedeCancelar && !puedeCompletar)
             {
                 ModelState.AddModelError("", "Solo puedes cancelar citas pendientes o completar citas pendientes/confirmadas.");
+                await CargarDatosEstadoCita(viewModel);
                 return View(viewModel);
             }
 
-            // Realizar cambio de estado
             cita.Estado = viewModel.NuevoEstado;
             cita.FechaCambioEstado = DateTime.Now;
 
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
+
+        private async Task CargarDatosEstadoCita(CambiarEstadoCitaViewModel viewModel)
+        {
+            var citaOriginal = await _context.Citas
+                .Include(c => c.Cliente)
+                .Include(c => c.Servicio)
+                .FirstOrDefaultAsync(c => c.Id == viewModel.Id);
+
+            if (citaOriginal != null)
+            {
+                viewModel.ClienteNombre = citaOriginal.Cliente.Nombre + " " + citaOriginal.Cliente.Apellido;
+                viewModel.ServicioNombre = citaOriginal.Servicio.Nombre;
+                viewModel.EstadoActual = citaOriginal.Estado;
+            }
+        }
+
+
 
     }
 }

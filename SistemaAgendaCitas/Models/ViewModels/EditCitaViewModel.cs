@@ -18,7 +18,7 @@ namespace SistemaAgendaCitas.Models.ViewModels
         [Required]
         public EstadoCita Estado { get; set; }
 
-        public string Comentarios { get; set; } = "";
+        public string? Comentarios { get; set; } = "";
 
         public string ClienteNombre { get; set; } = "";
 

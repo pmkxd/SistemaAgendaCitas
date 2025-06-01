@@ -46,8 +46,10 @@
 
             <div class="form-group">
                 <label asp-for="Comentarios"></label>
-                <textarea class="form-control" readonly>@Model.Comentarios</textarea>
+                <textarea class="form-control" disabled>@Model.Comentarios</textarea>
+                <input type="hidden" asp-for="Comentarios" />
             </div>
+
 
 
             <button type="submit" class="btn btn-primary">Guardar Cambios</button>
