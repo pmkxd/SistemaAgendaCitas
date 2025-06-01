@@ -25,25 +25,26 @@ namespace SistemaAgendaCitas.Controllers
         // GET: Citas
         public async Task<IActionResult> Index(DateTime? fecha, int? clienteId, EstadoCita? estado)
         {
+            // Clientes para el filtro
             var clientesLista = await _context.Clientes
                 .Select(c => new SelectListItem
                 {
                     Value = c.Id.ToString(),
                     Text = c.Apellido
                 }).ToListAsync();
+            ViewBag.Clientes = new SelectList(clientesLista, "Value", "Text", clienteId?.ToString());
 
-            var estadosLista = Enum.GetValues(typeof(EstadoCita))
+            // Estados para el filtro (con selección activa correcta)
+            ViewBag.Estados = Enum.GetValues(typeof(EstadoCita))
                 .Cast<EstadoCita>()
                 .Select(e => new SelectListItem
                 {
                     Value = ((int)e).ToString(),
-                    Text = e.ToString()
+                    Text = e.ToString(),
+                    Selected = estado.HasValue && (int)e == (int)estado.Value
                 }).ToList();
 
-            // Establecer selección activa
-            ViewBag.Clientes = new SelectList(clientesLista, "Value", "Text", clienteId?.ToString());
-            ViewBag.Estados = new SelectList(estadosLista, "Value", "Text", estado?.ToString());
-
+            // Cargar las citas filtradas
             var citas = _context.Citas
                 .Include(c => c.Cliente)
                 .Include(c => c.Servicio)
@@ -60,6 +61,7 @@ namespace SistemaAgendaCitas.Controllers
 
             return View(await citas.ToListAsync());
         }
+
 
 
 
@@ -423,24 +425,16 @@ namespace SistemaAgendaCitas.Controllers
         [HttpGet]
         public IActionResult Reportes(DateTime? fechaInicio, DateTime? fechaFin)
         {
-            if (fechaInicio == null || fechaFin == null)
-            {
-                return View(new CitasPorPeriodoViewModel
-                {
-                    FechaInicio = DateTime.MinValue,
-                    FechaFin = DateTime.MinValue,
-                    Pendientes = 0,
-                    Confirmadas = 0,
-                    Completadas = 0,
-                    Canceladas = 0
-                });
-            }
+            // Si no se envían fechas, usar último mes
+            fechaInicio ??= DateTime.Today.AddMonths(-1);
+            fechaFin ??= DateTime.Today;
 
             var citas = _context.Citas
+                .Include(c => c.Servicio)
                 .Where(c => c.Fecha >= fechaInicio && c.Fecha <= fechaFin)
                 .ToList();
 
-            var modelo = new CitasPorPeriodoViewModel
+            var modelo = new ReporteCitasYServiciosViewModel
             {
                 FechaInicio = fechaInicio.Value,
                 FechaFin = fechaFin.Value,
@@ -448,19 +442,22 @@ namespace SistemaAgendaCitas.Controllers
                 Confirmadas = citas.Count(c => c.Estado == EstadoCita.Confirmada),
                 Completadas = citas.Count(c => c.Estado == EstadoCita.Completada),
                 Canceladas = citas.Count(c => c.Estado == EstadoCita.Cancelada),
+                EstadisticasServicios = citas
+                    .Where(c => c.Estado != EstadoCita.Cancelada)
+                    .GroupBy(c => c.Servicio.Nombre)
+                    .Select(g => new ServicioEstadistica
+                    {
+                        NombreServicio = g.Key,
+                        CantidadCitas = g.Count(),
+                        IngresoTotal = g.Sum(c => c.Servicio.Precio)
+                    })
+                    .OrderByDescending(e => e.CantidadCitas)
+                    .ToList()
             };
 
             return View(modelo);
         }
-        public IActionResult Reportes()
-        {
-            var model = new CitasPorPeriodoViewModel
-            {
-                FechaInicio = DateTime.MinValue,
-                FechaFin = DateTime.MinValue
-            };
-            return View(model);
-        }
+
 
     }
 }
