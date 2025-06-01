@@ -420,5 +420,47 @@ namespace SistemaAgendaCitas.Controllers
             return Json(citas);
         }
 
+        [HttpGet]
+        public IActionResult Reportes(DateTime? fechaInicio, DateTime? fechaFin)
+        {
+            if (fechaInicio == null || fechaFin == null)
+            {
+                return View(new CitasPorPeriodoViewModel
+                {
+                    FechaInicio = DateTime.MinValue,
+                    FechaFin = DateTime.MinValue,
+                    Pendientes = 0,
+                    Confirmadas = 0,
+                    Completadas = 0,
+                    Canceladas = 0
+                });
+            }
+
+            var citas = _context.Citas
+                .Where(c => c.Fecha >= fechaInicio && c.Fecha <= fechaFin)
+                .ToList();
+
+            var modelo = new CitasPorPeriodoViewModel
+            {
+                FechaInicio = fechaInicio.Value,
+                FechaFin = fechaFin.Value,
+                Pendientes = citas.Count(c => c.Estado == EstadoCita.Pendiente),
+                Confirmadas = citas.Count(c => c.Estado == EstadoCita.Confirmada),
+                Completadas = citas.Count(c => c.Estado == EstadoCita.Completada),
+                Canceladas = citas.Count(c => c.Estado == EstadoCita.Cancelada),
+            };
+
+            return View(modelo);
+        }
+        public IActionResult Reportes()
+        {
+            var model = new CitasPorPeriodoViewModel
+            {
+                FechaInicio = DateTime.MinValue,
+                FechaFin = DateTime.MinValue
+            };
+            return View(model);
+        }
+
     }
 }
