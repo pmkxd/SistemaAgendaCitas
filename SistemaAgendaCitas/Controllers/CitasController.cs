@@ -16,51 +16,62 @@ namespace SistemaAgendaCitas.Controllers
     public class CitasController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly ILogger<CitasController> _logger;
 
-        public CitasController(ApplicationDbContext context)
+        public CitasController(ApplicationDbContext context, ILogger<CitasController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         // GET: Citas
         public async Task<IActionResult> Index(DateTime? fecha, int? clienteId, EstadoCita? estado)
         {
-            // Clientes para el filtro
-            var clientesLista = await _context.Clientes
-                .Select(c => new SelectListItem
-                {
-                    Value = c.Id.ToString(),
-                    Text = c.Apellido
-                }).ToListAsync();
-            ViewBag.Clientes = new SelectList(clientesLista, "Value", "Text", clienteId?.ToString());
+            _logger.LogInformation("Accediendo a Index de Citas. Filtros: Fecha={Fecha}, ClienteId={ClienteId}, Estado={Estado}",
+                fecha, clienteId, estado);
 
-            // Estados para el filtro (con selección activa correcta)
-            ViewBag.Estados = Enum.GetValues(typeof(EstadoCita))
-                .Cast<EstadoCita>()
-                .Select(e => new SelectListItem
-                {
-                    Value = ((int)e).ToString(),
-                    Text = e.ToString(),
-                    Selected = estado.HasValue && (int)e == (int)estado.Value
-                }).ToList();
+            try
+            {
+                var clientesLista = await _context.Clientes
+                    .Select(c => new SelectListItem
+                    {
+                        Value = c.Id.ToString(),
+                        Text = c.Apellido
+                    }).ToListAsync();
+                ViewBag.Clientes = new SelectList(clientesLista, "Value", "Text", clienteId?.ToString());
 
-            // Cargar las citas filtradas
-            var citas = _context.Citas
-                .Include(c => c.Cliente)
-                .Include(c => c.Servicio)
-                .AsQueryable();
+                ViewBag.Estados = Enum.GetValues(typeof(EstadoCita))
+                    .Cast<EstadoCita>()
+                    .Select(e => new SelectListItem
+                    {
+                        Value = ((int)e).ToString(),
+                        Text = e.ToString(),
+                        Selected = estado.HasValue && (int)e == (int)estado.Value
+                    }).ToList();
 
-            if (fecha.HasValue)
-                citas = citas.Where(c => c.Fecha.Date == fecha.Value.Date);
+                var citas = _context.Citas
+                    .Include(c => c.Cliente)
+                    .Include(c => c.Servicio)
+                    .AsQueryable();
 
-            if (clienteId.HasValue)
-                citas = citas.Where(c => c.ClienteId == clienteId.Value);
+                if (fecha.HasValue)
+                    citas = citas.Where(c => c.Fecha.Date == fecha.Value.Date);
+                if (clienteId.HasValue)
+                    citas = citas.Where(c => c.ClienteId == clienteId.Value);
+                if (estado.HasValue)
+                    citas = citas.Where(c => c.Estado == estado.Value);
 
-            if (estado.HasValue)
-                citas = citas.Where(c => c.Estado == estado.Value);
-
-            return View(await citas.ToListAsync());
+                var lista = await citas.ToListAsync();
+                _logger.LogInformation("Se cargaron {Cantidad} citas.", lista.Count);
+                return View(lista);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error en Index de Citas.");
+                return View("Error");
+            }
         }
+
 
 
 
@@ -126,18 +137,18 @@ namespace SistemaAgendaCitas.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(AddCitaViewModel viewModel)
         {
-            // Excluir propiedades de navegación si existen
+            _logger.LogInformation("Intentando crear una nueva cita para ClienteId={ClienteId}, ServicioId={ServicioId}, Fecha={Fecha}, Hora={Hora}",
+                viewModel.ClienteId, viewModel.ServicioId, viewModel.Fecha, viewModel.Hora);
+
             ModelState.Remove("Cliente");
             ModelState.Remove("Servicio");
 
-            // Validar disponibilidad de horario (solapamiento)
             bool existeSolapamiento = await _context.Citas.AnyAsync(c =>
-    c.Fecha == viewModel.Fecha &&
-    c.Hora == viewModel.Hora);
-
+                c.Fecha == viewModel.Fecha && c.Hora == viewModel.Hora);
 
             if (existeSolapamiento)
             {
+                _logger.LogWarning("Solapamiento detectado al crear cita en Fecha={Fecha}, Hora={Hora}", viewModel.Fecha, viewModel.Hora);
                 ModelState.AddModelError(string.Empty, "Ya existe una cita registrada para el mismo servicio, fecha y hora.");
             }
 
@@ -155,10 +166,13 @@ namespace SistemaAgendaCitas.Controllers
 
                 _context.Add(cita);
                 await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Cita creada exitosamente con ID={Id}", cita.Id);
                 return RedirectToAction(nameof(Index));
             }
 
-            // Si hay errores, recargar listas desplegables
+            _logger.LogWarning("ModelState inválido al intentar crear cita.");
+            // recargar combos
             viewModel.Clientes = await _context.Clientes
                 .Select(c => new SelectListItem
                 {
@@ -175,6 +189,7 @@ namespace SistemaAgendaCitas.Controllers
 
             return View(viewModel);
         }
+
 
 
 
@@ -214,26 +229,31 @@ namespace SistemaAgendaCitas.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, EditCitaViewModel viewModel)
         {
-            if (id != viewModel.Id) return NotFound();
+            if (id != viewModel.Id)
+            {
+                _logger.LogWarning("ID de ruta ({IdRuta}) no coincide con ID del modelo ({IdModelo})", id, viewModel.Id);
+                return NotFound();
+            }
 
             if (ModelState.IsValid)
             {
                 var cita = await _context.Citas.FindAsync(id);
-                if (cita == null) return NotFound();
+                if (cita == null)
+                {
+                    _logger.LogWarning("No se encontró la cita con ID={Id} para edición.", id);
+                    return NotFound();
+                }
 
-                // Validar solapamiento de fecha y hora
                 bool existeSolapamiento = await _context.Citas.AnyAsync(c =>
-                    c.Id != viewModel.Id &&
-                    c.Fecha == viewModel.Fecha &&
-                    c.Hora == viewModel.Hora);
+                    c.Id != viewModel.Id && c.Fecha == viewModel.Fecha && c.Hora == viewModel.Hora);
 
                 if (existeSolapamiento)
                 {
+                    _logger.LogWarning("Solapamiento al editar cita ID={Id}", id);
                     ModelState.AddModelError(string.Empty, "Ya existe una cita registrada para esa fecha y hora.");
                 }
                 else
                 {
-                    // Validar si se intenta cambiar de estado
                     bool cambioEstado = cita.Estado != viewModel.Estado;
                     if (cambioEstado)
                     {
@@ -243,6 +263,7 @@ namespace SistemaAgendaCitas.Controllers
 
                         if (!puedeCancelar && !puedeCompletar)
                         {
+                            _logger.LogWarning("Cambio de estado inválido en cita ID={Id}: de {Actual} a {Nuevo}", id, cita.Estado, viewModel.Estado);
                             ModelState.AddModelError("", "Solo puedes cancelar citas pendientes o completar citas pendientes/confirmadas.");
                         }
                         else
@@ -252,7 +273,6 @@ namespace SistemaAgendaCitas.Controllers
                         }
                     }
 
-                    // Si no hay errores de validación extra
                     if (ModelState.ErrorCount == 0)
                     {
                         cita.Fecha = viewModel.Fecha;
@@ -260,12 +280,14 @@ namespace SistemaAgendaCitas.Controllers
                         cita.Comentarios = viewModel.Comentarios;
 
                         await _context.SaveChangesAsync();
+                        _logger.LogInformation("Cita ID={Id} editada correctamente.", id);
                         return RedirectToAction(nameof(Index));
                     }
                 }
             }
 
-            // Restaurar valores visibles si hubo errores
+            _logger.LogWarning("ModelState inválido al editar cita ID={Id}", viewModel.Id);
+            // recargar datos...
             var citaCompleta = await _context.Citas
                 .Include(c => c.Cliente)
                 .Include(c => c.Servicio)
@@ -281,6 +303,7 @@ namespace SistemaAgendaCitas.Controllers
 
             return View(viewModel);
         }
+
 
 
 
@@ -312,15 +335,29 @@ namespace SistemaAgendaCitas.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var cita = await _context.Citas.FindAsync(id);
-            if (cita != null)
+            try
             {
-                _context.Citas.Remove(cita);
+                var cita = await _context.Citas.FindAsync(id);
+                if (cita != null)
+                {
+                    _context.Citas.Remove(cita);
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation("Cita eliminada correctamente. ID={Id}", id);
+                }
+                else
+                {
+                    _logger.LogWarning("Intento de eliminar cita no existente. ID={Id}", id);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al intentar eliminar cita ID={Id}", id);
+                TempData["Error"] = "Ocurrió un error al eliminar la cita.";
             }
 
-            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
+
 
         private bool CitaExists(int id)
         {
@@ -355,19 +392,27 @@ namespace SistemaAgendaCitas.Controllers
         {
             if (!ModelState.IsValid)
             {
+                _logger.LogWarning("ModelState inválido al cambiar estado de cita ID={Id}", viewModel.Id);
                 await CargarDatosEstadoCita(viewModel);
                 return View(viewModel);
             }
 
             var cita = await _context.Citas.FindAsync(viewModel.Id);
-            if (cita == null) return NotFound();
+            if (cita == null)
+            {
+                _logger.LogWarning("No se encontró la cita con ID={Id} para cambiar estado", viewModel.Id);
+                return NotFound();
+            }
 
-            // Validar estados permitidos para cambio
             bool puedeCancelar = cita.Estado == EstadoCita.Pendiente && viewModel.NuevoEstado == EstadoCita.Cancelada;
-            bool puedeCompletar = (cita.Estado == EstadoCita.Pendiente || cita.Estado == EstadoCita.Confirmada) && viewModel.NuevoEstado == EstadoCita.Completada;
+            bool puedeCompletar = (cita.Estado == EstadoCita.Pendiente || cita.Estado == EstadoCita.Confirmada)
+                && viewModel.NuevoEstado == EstadoCita.Completada;
 
             if (!puedeCancelar && !puedeCompletar)
             {
+                _logger.LogWarning("Intento de cambio de estado inválido. ID={Id}, EstadoActual={Actual}, NuevoEstado={Nuevo}",
+                    viewModel.Id, cita.Estado, viewModel.NuevoEstado);
+
                 ModelState.AddModelError("", "Solo puedes cancelar citas pendientes o completar citas pendientes/confirmadas.");
                 await CargarDatosEstadoCita(viewModel);
                 return View(viewModel);
@@ -377,8 +422,10 @@ namespace SistemaAgendaCitas.Controllers
             cita.FechaCambioEstado = DateTime.Now;
 
             await _context.SaveChangesAsync();
+            _logger.LogInformation("Cita ID={Id} cambio de estado exitoso a {NuevoEstado}", viewModel.Id, viewModel.NuevoEstado);
             return RedirectToAction(nameof(Index));
         }
+
 
         private async Task CargarDatosEstadoCita(CambiarEstadoCitaViewModel viewModel)
         {
