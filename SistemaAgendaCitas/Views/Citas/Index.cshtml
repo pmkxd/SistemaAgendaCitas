@@ -3,41 +3,49 @@
 @{
     ViewData["Title"] = "Index";
 }
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
 
-<h1>Index</h1>
+
+<h1>Gestión de Citas</h1>
 <p>
-    <a asp-action="Calendario">Ver vista Calendario</a>
+    <a asp-action="Calendario" class="btn btn-sm btn-warning">Ver vista Calendario</a>
 </p>
 <p>
-    <a asp-action="Create">Agregar nueva cita</a>
+    <a asp-action="Create" class="btn btn-sm btn-primary">Agregar nueva cita</a>
 </p>
-
-<form method="get" class="mb-3">
-    <div class="form-row">
-        <div class="form-group col-md-3">
-            <label>Fecha:</label>
-            <input type="date" name="fecha" class="form-control" value="@(Context.Request.Query["fecha"])" />
-        </div>
-        <div class="form-group col-md-3">
-            <label>Cliente:</label>
-            <select name="clienteId" class="form-control" asp-items="ViewBag.Clientes">
-                <option value="">-- Todos --</option>
-            </select>
-
-        </div>
-        <div class="form-group col-md-3">
-            <label>Estado:</label>
-         
-            <select name="estado" class="form-control" asp-items="ViewBag.Estados">
-                <option value="">-- Todos --</option>
-            </select>
-
-        </div>
-        <div class="form-group col-md-3 align-self-end">
-            <button type="submit" class="btn btn-primary">Filtrar</button>
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label>Fecha:</label>
+                    <input type="date" name="fecha" class="form-control" value="@(Context.Request.Query["fecha"])" />
+                </div>
+                <div class="col-md-3">
+                    <label>Cliente:</label>
+                    <select name="clienteId" class="form-control" asp-items="ViewBag.Clientes">
+                        <option value="">-- Todos --</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label>Estado:</label>
+                    <select name="estado" class="form-control" asp-items="ViewBag.Estados">
+                        <option value="">-- Todos --</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary">Filtrar</button>
+                </div>
+            </form>
         </div>
     </div>
-</form>
+
+
 
 <table class="table">
     <thead>
@@ -76,11 +84,13 @@
                 <td>@item.Comentarios</td>
                 <td>@item.FechaCambioEstado?.ToString("g")</td>
                 <td>
-                    <a asp-action="CambiarEstado" asp-route-id="@item.Id">Cambiar Estado</a> |
-                    <a asp-action="Edit" asp-route-id="@item.Id">Edit</a> |
-                    <a asp-action="Details" asp-route-id="@item.Id">Details</a> |
-                    <a asp-action="Delete" asp-route-id="@item.Id">Delete</a>
+                    <a asp-action="CambiarEstado" asp-route-id="@item.Id" class="btn btn-sm btn-warning">Cambiar Estado</a> |
+                    <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-warning">Editar</a> |
+                    <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-primary">Detalles</a> |
+                    <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-sm btn-danger">Eliminar</a>
                 </td>
+                
+
             </tr>
         }
     </tbody>

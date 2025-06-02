@@ -4,14 +4,15 @@
 @{
     ViewData["Title"] = "Clientes";
 }
-@if (TempData["Error"] != null)
+@if (TempData["Success"] != null)
 {
-    <div class="alert alert-danger">
-        @TempData["Error"]
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @TempData["Success"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 }
 
-<h1>Clientes</h1>
+<h1>Lista de Clientes</h1>
 
 <p>
     <a class="btn btn-primary" asp-action="Create">Nuevo Cliente</a>
@@ -42,7 +43,8 @@
                 <td>@cliente.Telefono</td>
                 <td>@cliente.FechaRegistro.ToShortDateString()</td>
                 <td>
-                    <a asp-action="Edit" asp-route-id="@cliente.Id" class="btn btn-sm btn-warning">Editar</a>
+                    <a asp-action="Edit" asp-route-id="@cliente.Id" class="btn btn-sm btn-warning">Editar</a> |
+                    <a asp-action="Details" asp-route-id="@cliente.Id" class="btn btn-sm btn-primary">Detalles</a> |
                     <a asp-action="Delete" asp-route-id="@cliente.Id" class="btn btn-sm btn-danger">Eliminar</a>
                 </td>
             </tr>
