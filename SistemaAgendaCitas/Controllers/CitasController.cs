@@ -36,7 +36,7 @@ namespace SistemaAgendaCitas.Controllers
                     .Select(c => new SelectListItem
                     {
                         Value = c.Id.ToString(),
-                        Text = c.Apellido
+                        Text = c.Nombre
                     }).ToListAsync();
                 ViewBag.Clientes = new SelectList(clientesLista, "Value", "Text", clienteId?.ToString());
 
