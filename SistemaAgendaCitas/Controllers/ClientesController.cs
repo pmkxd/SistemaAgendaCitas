@@ -81,9 +81,13 @@ namespace SistemaAgendaCitas.Controllers
         [HttpGet]
         public IActionResult Create()
         {
+            var ahora = DateTime.Now;
+            var fechaSinMilisegundos = new DateTime(ahora.Year, ahora.Month, ahora.Day, ahora.Hour, ahora.Minute,0);
+
             var viewModel = new AddClienteViewModel
             {
-                FechaRegistro = DateTime.Today
+                // Asigna la fecha y hora sin milisegundos
+                FechaRegistro = fechaSinMilisegundos
             };
             return View(viewModel);
         }

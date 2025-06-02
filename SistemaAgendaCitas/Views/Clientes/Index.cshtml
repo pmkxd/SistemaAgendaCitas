@@ -41,7 +41,7 @@
                 <td>@cliente.Apellido</td>
                 <td>@cliente.Email</td>
                 <td>@cliente.Telefono</td>
-                <td>@cliente.FechaRegistro.ToShortDateString()</td>
+                <td>@cliente.FechaRegistro.ToString("dd/MM/yyyy HH:mm")</td>
                 <td>
                     <a asp-action="Edit" asp-route-id="@cliente.Id" class="btn btn-sm btn-warning">Editar</a> |
                     <a asp-action="Details" asp-route-id="@cliente.Id" class="btn btn-sm btn-primary">Detalles</a> |
