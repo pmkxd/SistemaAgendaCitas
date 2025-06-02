@@ -8,23 +8,56 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using X.PagedList;
+using X.PagedList.Extensions;
+
+
 
 namespace SistemaAgendaCitas.Controllers
 {
     public class ClientesController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly ILogger<ClientesController> _logger;
 
-        public ClientesController(ApplicationDbContext context)
+        public ClientesController(ApplicationDbContext context, ILogger<ClientesController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         // GET: Clientes
-        public async Task<IActionResult> Index()
+        public IActionResult Index(string orden, int? pagina)
         {
-            return View(await _context.Clientes.ToListAsync());
+            _logger.LogInformation("Accediendo a Index de Clientes con orden: {Orden}, Página: {Pagina}", orden, pagina);
+
+            var clientes = _context.Clientes.AsQueryable();
+
+            ViewData["OrdenActual"] = orden;
+            ViewData["OrdenPorNombre"] = string.IsNullOrEmpty(orden) ? "nombre_desc" : "";
+            ViewData["OrdenPorFecha"] = orden == "fecha" ? "fecha_desc" : "fecha";
+
+            clientes = orden switch
+            {
+                "nombre_desc" => clientes.OrderByDescending(c => c.Nombre.ToLower()),
+                "fecha" => clientes.OrderBy(c => c.FechaRegistro),
+                "fecha_desc" => clientes.OrderByDescending(c => c.FechaRegistro),
+                _ => clientes.OrderBy(c => c.Nombre.ToLower())
+            };
+
+            int tamanioPagina = 10;
+            int numeroPagina = pagina ?? 1;
+
+            var paginados = clientes.ToPagedList(numeroPagina, tamanioPagina);
+
+            _logger.LogInformation("Mostrando página {Pagina} con orden {Orden}. Clientes en esta página: {Cantidad}",
+                numeroPagina, orden ?? "por defecto", paginados.Count);
+
+            return View(paginados);
         }
+
+
+
 
         // GET: Clientes/Details/5
         public async Task<IActionResult> Details(int? id)
@@ -62,24 +95,44 @@ namespace SistemaAgendaCitas.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(AddClienteViewModel viewModel)
         {
+            _logger.LogInformation("Intentando crear cliente con email: {Email}", viewModel.Email);
+
             if (ModelState.IsValid)
             {
-                var cliente = new Cliente
+                bool emailExiste = await _context.Clientes.AnyAsync(c => c.Email == viewModel.Email);
+                if (emailExiste)
                 {
-                    Nombre = viewModel.Nombre,
-                    Apellido = viewModel.Apellido,
-                    Email = viewModel.Email,
-                    Telefono = viewModel.Telefono,
-                    FechaRegistro = viewModel.FechaRegistro
-                };
+                    _logger.LogWarning("Creación fallida: Email ya registrado ({Email})", viewModel.Email);
+                    ModelState.AddModelError("Email", "El email ya está registrado.");
+                }
+                else
+                {
+                    var cliente = new Cliente
+                    {
+                        Nombre = viewModel.Nombre,
+                        Apellido = viewModel.Apellido,
+                        Email = viewModel.Email,
+                        Telefono = viewModel.Telefono,
+                        FechaRegistro = viewModel.FechaRegistro
+                    };
 
-                _context.Clientes.Add(cliente);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                    _context.Clientes.Add(cliente);
+                    await _context.SaveChangesAsync();
+
+                    _logger.LogInformation("Cliente creado exitosamente: ID={Id}, Email={Email}", cliente.Id, cliente.Email);
+
+                    return RedirectToAction(nameof(Index));
+                }
+            }
+            else
+            {
+                _logger.LogWarning("Validación fallida al crear cliente. Errores: {Errores}",
+                    string.Join(" | ", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage)));
             }
 
             return View(viewModel);
         }
+
 
 
 
@@ -111,25 +164,54 @@ namespace SistemaAgendaCitas.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, AddClienteViewModel viewModel)
         {
-            if (id != viewModel.Id) return NotFound();
+            if (id != viewModel.Id)
+            {
+                _logger.LogWarning("ID del modelo ({ModeloId}) no coincide con el ID de ruta ({RutaId})", viewModel.Id, id);
+                return NotFound();
+            }
 
             if (ModelState.IsValid)
             {
-                var cliente = await _context.Clientes.FindAsync(id);
-                if (cliente == null) return NotFound();
+                bool emailExiste = await _context.Clientes
+                    .AnyAsync(c => c.Email == viewModel.Email && c.Id != id);
 
-                cliente.Nombre = viewModel.Nombre;
-                cliente.Apellido = viewModel.Apellido;
-                cliente.Email = viewModel.Email;
-                cliente.Telefono = viewModel.Telefono;
-                cliente.FechaRegistro = viewModel.FechaRegistro;
+                if (emailExiste)
+                {
+                    _logger.LogWarning("Actualización fallida: Email ya usado por otro cliente ({Email})", viewModel.Email);
+                    ModelState.AddModelError("Email", "El email ya está registrado por otro cliente.");
+                }
+                else
+                {
+                    var cliente = await _context.Clientes.FindAsync(id);
+                    if (cliente == null)
+                    {
+                        _logger.LogWarning("Cliente no encontrado con ID={Id} para editar", id);
+                        return NotFound();
+                    }
 
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                    cliente.Nombre = viewModel.Nombre;
+                    cliente.Apellido = viewModel.Apellido;
+                    cliente.Email = viewModel.Email;
+                    cliente.Telefono = viewModel.Telefono;
+                    cliente.FechaRegistro = viewModel.FechaRegistro;
+
+                    await _context.SaveChangesAsync();
+
+                    _logger.LogInformation("Cliente ID={Id} actualizado correctamente", id);
+
+                    return RedirectToAction(nameof(Index));
+                }
+            }
+            else
+            {
+                _logger.LogWarning("Errores de validación al editar cliente ID={Id}: {Errores}",
+                    viewModel.Id,
+                    string.Join(" | ", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage)));
             }
 
             return View(viewModel);
         }
+
 
 
         // GET: Clientes/Delete/5
@@ -155,15 +237,36 @@ namespace SistemaAgendaCitas.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var cliente = await _context.Clientes.FindAsync(id);
-            if (cliente != null)
+            try
             {
+                var cliente = await _context.Clientes.FindAsync(id);
+                if (cliente == null)
+                {
+                    _logger.LogWarning("Intento de eliminar cliente no existente. ID={Id}", id);
+                    return NotFound();
+                }
+
+                bool tieneCitas = await _context.Citas.AnyAsync(c => c.ClienteId == id);
+                if (tieneCitas)
+                {
+                    _logger.LogWarning("No se puede eliminar cliente ID={Id} porque tiene citas asociadas.", id);
+                    TempData["Error"] = "No se puede eliminar el cliente porque tiene citas asociadas.";
+                    return RedirectToAction(nameof(Index));
+                }
+
                 _context.Clientes.Remove(cliente);
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Cliente eliminado correctamente. ID={Id}", id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al intentar eliminar cliente ID={Id}", id);
+                TempData["Error"] = "Ocurrió un error al eliminar el cliente.";
             }
 
-            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
+
 
         private bool ClienteExists(int id)
         {

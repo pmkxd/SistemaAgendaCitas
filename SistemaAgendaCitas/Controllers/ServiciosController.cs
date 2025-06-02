@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using SistemaAgendaCitas.Data;
+using SistemaAgendaCitas.Models;
 using SistemaAgendaCitas.Models.Entities;
 using SistemaAgendaCitas.Models.ViewModels;
 using System;
@@ -14,17 +15,37 @@ namespace SistemaAgendaCitas.Controllers
     public class ServiciosController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly ILogger<ServiciosController> _logger;
 
-        public ServiciosController(ApplicationDbContext context)
+        public ServiciosController(ApplicationDbContext context, ILogger<ServiciosController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         // GET: Servicios
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string estado)
         {
-            return View(await _context.Servicios.ToListAsync());
+            _logger.LogInformation("Accediendo a Index de Servicios con filtro de estado: {Estado}", estado);
+
+            ViewData["EstadoActual"] = estado;
+
+            var servicios = _context.Servicios.AsQueryable();
+
+            if (!string.IsNullOrEmpty(estado))
+            {
+                if (estado == "activos")
+                    servicios = servicios.Where(s => s.Activo);
+                else if (estado == "inactivos")
+                    servicios = servicios.Where(s => !s.Activo);
+            }
+
+            var lista = await servicios.ToListAsync();
+            _logger.LogInformation("Se encontraron {Cantidad} servicios", lista.Count);
+
+            return View(lista);
         }
+
 
         // GET: Servicios/Details/5
         public async Task<IActionResult> Details(int? id)
@@ -63,6 +84,8 @@ namespace SistemaAgendaCitas.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(AddServicioViewModel viewModel)
         {
+            _logger.LogInformation("Intentando crear nuevo servicio: {Nombre}, Activo={Activo}", viewModel.Nombre, viewModel.Activo);
+
             if (ModelState.IsValid)
             {
                 var servicio = new Servicio
@@ -76,11 +99,18 @@ namespace SistemaAgendaCitas.Controllers
 
                 _context.Servicios.Add(servicio);
                 await _context.SaveChangesAsync();
+
+                _logger.LogInformation("Servicio creado exitosamente: ID={Id}", servicio.Id);
+
                 return RedirectToAction(nameof(Index));
             }
 
+            _logger.LogWarning("Falló la validación al crear servicio. Errores: {Errores}",
+                string.Join("; ", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage)));
+
             return View(viewModel);
         }
+
 
 
         // GET: Servicios/Edit/5
@@ -111,12 +141,20 @@ namespace SistemaAgendaCitas.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, AddServicioViewModel viewModel)
         {
-            if (id != viewModel.Id) return NotFound();
+            if (id != viewModel.Id)
+            {
+                _logger.LogWarning("ID de ruta ({RutaId}) no coincide con ID del modelo ({ModeloId})", id, viewModel.Id);
+                return NotFound();
+            }
 
             if (ModelState.IsValid)
             {
                 var servicio = await _context.Servicios.FindAsync(id);
-                if (servicio == null) return NotFound();
+                if (servicio == null)
+                {
+                    _logger.LogWarning("Servicio con ID={Id} no encontrado para edición", id);
+                    return NotFound();
+                }
 
                 servicio.Nombre = viewModel.Nombre;
                 servicio.Descripcion = viewModel.Descripcion;
@@ -125,11 +163,15 @@ namespace SistemaAgendaCitas.Controllers
                 servicio.Activo = viewModel.Activo;
 
                 await _context.SaveChangesAsync();
+                _logger.LogInformation("Servicio ID={Id} actualizado correctamente.", id);
+
                 return RedirectToAction(nameof(Index));
             }
 
+            _logger.LogWarning("ModelState inválido al editar servicio ID={Id}", viewModel.Id);
             return View(viewModel);
         }
+
 
 
         // GET: Servicios/Delete/5
@@ -155,15 +197,38 @@ namespace SistemaAgendaCitas.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var servicio = await _context.Servicios.FindAsync(id);
-            if (servicio != null)
+            try
             {
-                _context.Servicios.Remove(servicio);
+                var servicio = await _context.Servicios.FindAsync(id);
+                if (servicio == null)
+                {
+                    _logger.LogWarning("Intento de eliminar servicio no existente. ID={Id}", id);
+                    return NotFound();
+                }
+
+                bool tieneCitasPendientes = await _context.Citas
+                    .AnyAsync(c => c.ServicioId == id && c.Estado == EstadoCita.Pendiente);
+
+                if (tieneCitasPendientes)
+                {
+                    _logger.LogWarning("No se puede desactivar servicio ID={Id} porque tiene citas pendientes.", id);
+                    TempData["Error"] = "No se puede eliminar el servicio porque tiene citas pendientes asociadas.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                servicio.Activo = false;
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Servicio marcado como inactivo correctamente. ID={Id}", id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al intentar eliminar servicio ID={Id}", id);
+                TempData["Error"] = "Ocurrió un error al eliminar el servicio.";
             }
 
-            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
+
 
         private bool ServicioExists(int id)
         {

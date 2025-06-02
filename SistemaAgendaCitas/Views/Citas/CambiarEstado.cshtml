@@ -1,0 +1,40 @@
+﻿@model SistemaAgendaCitas.Models.ViewModels.CambiarEstadoCitaViewModel
+
+<h2>Cambiar Estado de Cita</h2>
+
+<form asp-action="CambiarEstado" method="post">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+    <input type="hidden" asp-for="Id" />
+
+    <div class="mb-3">
+        <label>Cliente</label>
+        <input class="form-control" value="@Model.ClienteNombre" readonly />
+    </div>
+
+    <div class="mb-3">
+        <label>Servicio</label>
+        <input class="form-control" value="@Model.ServicioNombre" readonly />
+    </div>
+
+    <div class="mb-3">
+        <label>Estado Actual</label>
+        <input class="form-control" value="@Model.EstadoActual.ToString()" readonly />
+    </div>
+
+
+    <div class="mb-3">
+        <label>Nuevo Estado</label>
+        <select asp-for="NuevoEstado" asp-items="Html.GetEnumSelectList<EstadoCita>()" class="form-control"></select>
+        <span asp-validation-for="NuevoEstado" class="text-danger"></span>
+    </div>
+
+    <button type="submit" class="btn btn-sm btn-primary">Guardar Cambios</button>
+    <a asp-action="Index" class="btn btn-sm btn-secondary">Cancelar</a>
+</form>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}
