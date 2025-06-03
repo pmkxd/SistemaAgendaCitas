@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using SistemaAgendaCitas.Data;
+using SistemaAgendaCitas.Data.IRepositories;
 using SistemaAgendaCitas.Models;
 using SistemaAgendaCitas.Models.Entities;
 using SistemaAgendaCitas.Models.ViewModels;
@@ -14,13 +15,15 @@ namespace SistemaAgendaCitas.Controllers
 {
     public class ServiciosController : Controller
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IServicioRepository _servicioRepository;
         private readonly ILogger<ServiciosController> _logger;
+        private readonly ICitaRepository _citaRepository;
 
-        public ServiciosController(ApplicationDbContext context, ILogger<ServiciosController> logger)
+        public ServiciosController(IServicioRepository servicioRepository, ILogger<ServiciosController> logger, ICitaRepository citaRepository)
         {
-            _context = context;
+            _servicioRepository = servicioRepository;
             _logger = logger;
+            _citaRepository = citaRepository;
         }
 
         // GET: Servicios
@@ -28,22 +31,12 @@ namespace SistemaAgendaCitas.Controllers
         {
             _logger.LogInformation("Accediendo a Index de Servicios con filtro de estado: {Estado}", estado);
 
-            ViewData["EstadoActual"] = estado;
+            bool? estadoActivo = estado == "activos" ? true :
+                     estado == "inactivos" ? false : (bool?)null;
 
-            var servicios = _context.Servicios.AsQueryable();
+            var servicios = await _servicioRepository.ObtenerPorEstadoAsync(estadoActivo);
+            return View(servicios);
 
-            if (!string.IsNullOrEmpty(estado))
-            {
-                if (estado == "activos")
-                    servicios = servicios.Where(s => s.Activo);
-                else if (estado == "inactivos")
-                    servicios = servicios.Where(s => !s.Activo);
-            }
-
-            var lista = await servicios.ToListAsync();
-            _logger.LogInformation("Se encontraron {Cantidad} servicios", lista.Count);
-
-            return View(lista);
         }
 
 
@@ -55,8 +48,8 @@ namespace SistemaAgendaCitas.Controllers
                 return NotFound();
             }
 
-            var servicio = await _context.Servicios
-                .FirstOrDefaultAsync(m => m.Id == id);
+            var servicio = await _servicioRepository.ObtenerPorIdAsync(id.Value);
+
             if (servicio == null)
             {
                 return NotFound();
@@ -97,8 +90,7 @@ namespace SistemaAgendaCitas.Controllers
                     Activo = viewModel.Activo
                 };
 
-                _context.Servicios.Add(servicio);
-                await _context.SaveChangesAsync();
+                await _servicioRepository.AgregarAsync(servicio);
 
                 _logger.LogInformation("Servicio creado exitosamente: ID={Id}", servicio.Id);
 
@@ -117,7 +109,7 @@ namespace SistemaAgendaCitas.Controllers
         [HttpGet]
         public async Task<IActionResult> Edit(int id)
         {
-            var servicio = await _context.Servicios.FindAsync(id);
+            var servicio = await _servicioRepository.ObtenerPorIdAsync(id);
             if (servicio == null) return NotFound();
 
             var viewModel = new AddServicioViewModel
@@ -149,7 +141,7 @@ namespace SistemaAgendaCitas.Controllers
 
             if (ModelState.IsValid)
             {
-                var servicio = await _context.Servicios.FindAsync(id);
+                var servicio = await _servicioRepository.ObtenerPorIdAsync(id);
                 if (servicio == null)
                 {
                     _logger.LogWarning("Servicio con ID={Id} no encontrado para edición", id);
@@ -162,7 +154,7 @@ namespace SistemaAgendaCitas.Controllers
                 servicio.Precio = viewModel.Precio;
                 servicio.Activo = viewModel.Activo;
 
-                await _context.SaveChangesAsync();
+                await _servicioRepository.ActualizarAsync(servicio);
                 _logger.LogInformation("Servicio ID={Id} actualizado correctamente.", id);
 
                 return RedirectToAction(nameof(Index));
@@ -182,8 +174,7 @@ namespace SistemaAgendaCitas.Controllers
                 return NotFound();
             }
 
-            var servicio = await _context.Servicios
-                .FirstOrDefaultAsync(m => m.Id == id);
+            var servicio = await _servicioRepository.ObtenerPorIdAsync(id.Value);
             if (servicio == null)
             {
                 return NotFound();
@@ -199,15 +190,14 @@ namespace SistemaAgendaCitas.Controllers
         {
             try
             {
-                var servicio = await _context.Servicios.FindAsync(id);
+                var servicio = await _servicioRepository.ObtenerPorIdAsync(id);
                 if (servicio == null)
                 {
                     _logger.LogWarning("Intento de eliminar servicio no existente. ID={Id}", id);
                     return NotFound();
                 }
 
-                bool tieneCitasPendientes = await _context.Citas
-                    .AnyAsync(c => c.ServicioId == id && c.Estado == EstadoCita.Pendiente);
+                bool tieneCitasPendientes = await _citaRepository.ExisteCitaPendientePorServicioAsync(id);
 
                 if (tieneCitasPendientes)
                 {
@@ -217,7 +207,7 @@ namespace SistemaAgendaCitas.Controllers
                 }
 
                 servicio.Activo = false;
-                await _context.SaveChangesAsync();
+                await _servicioRepository.ActualizarAsync(servicio);
                 _logger.LogInformation("Servicio marcado como inactivo correctamente. ID={Id}", id);
             }
             catch (Exception ex)
@@ -230,9 +220,9 @@ namespace SistemaAgendaCitas.Controllers
         }
 
 
-        private bool ServicioExists(int id)
+        private async Task<bool> ServicioExists(int id)
         {
-            return _context.Servicios.Any(e => e.Id == id);
+            return await _servicioRepository.ExistePorIdAsync(id);
         }
     }
 }
