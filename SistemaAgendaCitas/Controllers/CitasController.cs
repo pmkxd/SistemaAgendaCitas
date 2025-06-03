@@ -110,7 +110,9 @@ namespace SistemaAgendaCitas.Controllers
         public async Task<IActionResult> Create()
         {
             var clientes = await _clienteRepository.ObtenerTodosAsync();
-            var servicios = await _servicioRepository.ObtenerTodosAsync();
+            var servicios = (await _servicioRepository.ObtenerTodosAsync())
+                .Where(s => s.Activo)
+                .ToList();
 
             var viewModel = new AddCitaViewModel
             {
@@ -175,7 +177,9 @@ namespace SistemaAgendaCitas.Controllers
             _logger.LogWarning("ModelState inválido al intentar crear cita.");
             // recargar combos
             var clientes = await _clienteRepository.ObtenerTodosAsync();
-            var servicios = await _servicioRepository.ObtenerTodosAsync();
+            var servicios = (await _servicioRepository.ObtenerTodosAsync())
+                .Where(s => s.Activo)
+                .ToList();
 
             viewModel.Clientes = clientes
                 .Select(c => new SelectListItem
