@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using SistemaAgendaCitas.Data;
+using SistemaAgendaCitas.Data.IRepositories;
 using SistemaAgendaCitas.Models.Entities;
 using SistemaAgendaCitas.Models.ViewModels;
 using System;
@@ -17,13 +18,15 @@ namespace SistemaAgendaCitas.Controllers
 {
     public class ClientesController : Controller
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IClienteRepository _clienteRepo;
         private readonly ILogger<ClientesController> _logger;
+        private readonly ICitaRepository _citaRepo;
 
-        public ClientesController(ApplicationDbContext context, ILogger<ClientesController> logger)
+        public ClientesController(IClienteRepository clienteRepo, ILogger<ClientesController> logger, ICitaRepository citaRepo)
         {
-            _context = context;
+            _clienteRepo = clienteRepo;
             _logger = logger;
+            _citaRepo = citaRepo;
         }
 
         // GET: Clientes
@@ -31,7 +34,7 @@ namespace SistemaAgendaCitas.Controllers
         {
             _logger.LogInformation("Accediendo a Index de Clientes con orden: {Orden}, Página: {Pagina}", orden, pagina);
 
-            var clientes = _context.Clientes.AsQueryable();
+            var clientes = _clienteRepo.ObtenerQueryable();
 
             ViewData["OrdenActual"] = orden;
             ViewData["OrdenPorNombre"] = string.IsNullOrEmpty(orden) ? "nombre_desc" : "";
@@ -67,8 +70,7 @@ namespace SistemaAgendaCitas.Controllers
                 return NotFound();
             }
 
-            var cliente = await _context.Clientes
-                .FirstOrDefaultAsync(m => m.Id == id);
+            var cliente = await _clienteRepo.BuscarPorIdAsync(id.Value);
             if (cliente == null)
             {
                 return NotFound();
@@ -103,7 +105,7 @@ namespace SistemaAgendaCitas.Controllers
 
             if (ModelState.IsValid)
             {
-                bool emailExiste = await _context.Clientes.AnyAsync(c => c.Email == viewModel.Email);
+                bool emailExiste = await _clienteRepo.ExisteEmailAsync(viewModel.Email);
                 if (emailExiste)
                 {
                     _logger.LogWarning("Creación fallida: Email ya registrado ({Email})", viewModel.Email);
@@ -119,9 +121,9 @@ namespace SistemaAgendaCitas.Controllers
                         Telefono = viewModel.Telefono,
                         FechaRegistro = viewModel.FechaRegistro
                     };
+                    
+                    await _clienteRepo.AgregarAsync(cliente);
 
-                    _context.Clientes.Add(cliente);
-                    await _context.SaveChangesAsync();
 
                     _logger.LogInformation("Cliente creado exitosamente: ID={Id}, Email={Email}", cliente.Id, cliente.Email);
 
@@ -140,17 +142,17 @@ namespace SistemaAgendaCitas.Controllers
 
 
 
-        // GET: Clientes/Edit/5
+        // Fix for CS1061: Ensure the awaited result of the Task<Cliente> is used before accessing properties.
         [HttpGet]
         public async Task<IActionResult> Edit(int id)
         {
-            var cliente = await _context.Clientes.FindAsync(id);
+            var cliente = await _clienteRepo.BuscarPorIdAsync(id); // Await the Task to get the Cliente object.
             if (cliente == null) return NotFound();
 
             var viewModel = new AddClienteViewModel
             {
                 Id = cliente.Id,
-                Nombre = cliente.Nombre,
+                Nombre = cliente.Nombre, // Access properties of the Cliente object.
                 Apellido = cliente.Apellido,
                 Email = cliente.Email,
                 Telefono = cliente.Telefono,
@@ -176,8 +178,7 @@ namespace SistemaAgendaCitas.Controllers
 
             if (ModelState.IsValid)
             {
-                bool emailExiste = await _context.Clientes
-                    .AnyAsync(c => c.Email == viewModel.Email && c.Id != id);
+                bool emailExiste = await _clienteRepo.ExisteEmailEnOtroClienteAsync(viewModel.Email, viewModel.Id);
 
                 if (emailExiste)
                 {
@@ -186,7 +187,7 @@ namespace SistemaAgendaCitas.Controllers
                 }
                 else
                 {
-                    var cliente = await _context.Clientes.FindAsync(id);
+                    var cliente = await _clienteRepo.BuscarPorIdAsync(id);
                     if (cliente == null)
                     {
                         _logger.LogWarning("Cliente no encontrado con ID={Id} para editar", id);
@@ -199,7 +200,7 @@ namespace SistemaAgendaCitas.Controllers
                     cliente.Telefono = viewModel.Telefono;
                     cliente.FechaRegistro = viewModel.FechaRegistro;
 
-                    await _context.SaveChangesAsync();
+                    await _clienteRepo.ActualizarAsync(cliente);
 
                     _logger.LogInformation("Cliente ID={Id} actualizado correctamente", id);
 
@@ -226,8 +227,7 @@ namespace SistemaAgendaCitas.Controllers
                 return NotFound();
             }
 
-            var cliente = await _context.Clientes
-                .FirstOrDefaultAsync(m => m.Id == id);
+            var cliente = await _clienteRepo.BuscarPorIdAsync(id.Value);
             if (cliente == null)
             {
                 return NotFound();
@@ -243,14 +243,14 @@ namespace SistemaAgendaCitas.Controllers
         {
             try
             {
-                var cliente = await _context.Clientes.FindAsync(id);
+                var cliente = await _clienteRepo.BuscarPorIdAsync(id);
                 if (cliente == null)
                 {
                     _logger.LogWarning("Intento de eliminar cliente no existente. ID={Id}", id);
                     return NotFound();
                 }
 
-                bool tieneCitas = await _context.Citas.AnyAsync(c => c.ClienteId == id);
+                bool tieneCitas = await _citaRepo.ExistenCitasPorClienteAsync(id);
                 if (tieneCitas)
                 {
                     _logger.LogWarning("No se puede eliminar cliente ID={Id} porque tiene citas asociadas.", id);
@@ -258,8 +258,7 @@ namespace SistemaAgendaCitas.Controllers
                     return RedirectToAction(nameof(Index));
                 }
 
-                _context.Clientes.Remove(cliente);
-                await _context.SaveChangesAsync();
+                await _clienteRepo.EliminarAsync(id);
                 _logger.LogInformation("Cliente eliminado correctamente. ID={Id}", id);
             }
             catch (Exception ex)
@@ -272,9 +271,9 @@ namespace SistemaAgendaCitas.Controllers
         }
 
 
-        private bool ClienteExists(int id)
+        private async Task<bool> ClienteExists(int id)
         {
-            return _context.Clientes.Any(e => e.Id == id);
+            return await _clienteRepo.ExistePorIdAsync(id);
         }
     }
 }

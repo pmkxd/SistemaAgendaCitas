@@ -2,6 +2,8 @@
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using SistemaAgendaCitas.Data;
+using SistemaAgendaCitas.Data.IRepositories;
+using SistemaAgendaCitas.Data.Repositories;
 using SistemaAgendaCitas.Models;
 using SistemaAgendaCitas.Models.Entities;
 using SistemaAgendaCitas.Models.ViewModels;
@@ -15,13 +17,17 @@ namespace SistemaAgendaCitas.Controllers
 {
     public class CitasController : Controller
     {
-        private readonly ApplicationDbContext _context;
+        private readonly ICitaRepository _citaRepository;
         private readonly ILogger<CitasController> _logger;
+        private readonly IClienteRepository _clienteRepository;
+        private readonly IServicioRepository _servicioRepository;
 
-        public CitasController(ApplicationDbContext context, ILogger<CitasController> logger)
+        public CitasController(ICitaRepository citaRepository, ILogger<CitasController> logger, IClienteRepository clienteRepository, IServicioRepository servicioRepository)
         {
-            _context = context;
+            _citaRepository = citaRepository;
             _logger = logger;
+            _clienteRepository = clienteRepository;
+            _servicioRepository = servicioRepository;
         }
 
         // GET: Citas
@@ -32,38 +38,44 @@ namespace SistemaAgendaCitas.Controllers
 
             try
             {
-                var clientesLista = await _context.Clientes
-                    .Select(c => new SelectListItem
-                    {
-                        Value = c.Id.ToString(),
-                        Text = c.Nombre
-                    }).ToListAsync();
-                ViewBag.Clientes = new SelectList(clientesLista, "Value", "Text", clienteId?.ToString());
-
-                ViewBag.Estados = Enum.GetValues(typeof(EstadoCita))
-                    .Cast<EstadoCita>()
-                    .Select(e => new SelectListItem
-                    {
-                        Value = ((int)e).ToString(),
-                        Text = e.ToString(),
-                        Selected = estado.HasValue && (int)e == (int)estado.Value
-                    }).ToList();
-
-                var citas = _context.Citas
-                    .Include(c => c.Cliente)
-                    .Include(c => c.Servicio)
-                    .AsQueryable();
+                var clientes = await _clienteRepository.ObtenerTodosAsync();
+                var citasQuery = _citaRepository.ObtenerCitasConClientesYServicios();
 
                 if (fecha.HasValue)
-                    citas = citas.Where(c => c.Fecha.Date == fecha.Value.Date);
-                if (clienteId.HasValue)
-                    citas = citas.Where(c => c.ClienteId == clienteId.Value);
-                if (estado.HasValue)
-                    citas = citas.Where(c => c.Estado == estado.Value);
+                    citasQuery = citasQuery.Where(c => c.Fecha.Date == fecha.Value.Date);
 
-                var lista = await citas.ToListAsync();
-                _logger.LogInformation("Se cargaron {Cantidad} citas.", lista.Count);
-                return View(lista);
+                if (clienteId.HasValue)
+                    citasQuery = citasQuery.Where(c => c.ClienteId == clienteId.Value);
+
+                if (estado.HasValue)
+                    citasQuery = citasQuery.Where(c => c.Estado == estado.Value);
+
+                var listaCitas = await citasQuery.ToListAsync();
+
+                var modelo = new IndexCitasViewModel
+                {
+                    Fecha = fecha,
+                    ClienteId = clienteId,
+                    Estado = estado,
+                    Clientes = clientes
+                        .Select(c => new SelectListItem
+                        {
+                            Value = c.Id.ToString(),
+                            Text = c.Nombre,
+                            Selected = clienteId.HasValue && c.Id == clienteId.Value
+                        }).ToList(),
+                    Estados = Enum.GetValues(typeof(EstadoCita))
+                        .Cast<EstadoCita>()
+                        .Select(e => new SelectListItem
+                        {
+                            Value = ((int)e).ToString(),
+                            Text = e.ToString(),
+                            Selected = estado.HasValue && (int)estado.Value == (int)e
+                        }).ToList(),
+                    Citas = listaCitas
+                };
+
+                return View(modelo);
             }
             catch (Exception ex)
             {
@@ -71,6 +83,7 @@ namespace SistemaAgendaCitas.Controllers
                 return View("Error");
             }
         }
+
 
 
 
@@ -84,10 +97,7 @@ namespace SistemaAgendaCitas.Controllers
                 return NotFound();
             }
 
-            var cita = await _context.Citas
-                .Include(c => c.Cliente)
-                .Include(c => c.Servicio)
-                .FirstOrDefaultAsync(m => m.Id == id);
+            var cita = await _citaRepository.ObtenerPorIdAsync(id);
             if (cita == null)
             {
                 return NotFound();
@@ -97,37 +107,30 @@ namespace SistemaAgendaCitas.Controllers
         }
 
         // GET: Citas/Create
-        public IActionResult Create()
+        public async Task<IActionResult> Create()
         {
+            var clientes = await _clienteRepository.ObtenerTodosAsync();
+            var servicios = await _servicioRepository.ObtenerTodosAsync();
 
             var viewModel = new AddCitaViewModel
             {
-
-                Fecha = DateTime.Today,               
-                Hora = new TimeSpan(0, 0, 0),        
-
-                Clientes = _context.Clientes
-                    .Select(c => new SelectListItem
-                    {
-                        Value = c.Id.ToString(),
-                        Text = c.Nombre
-                    }).ToList(),
-
-                Servicios = _context.Servicios
-                    .Select(s => new SelectListItem
-                    {
-                        Value = s.Id.ToString(),
-                        Text = s.Nombre
-                    }).ToList()
+                Fecha = DateTime.Today,
+                Hora = DateTime.Now.TimeOfDay,
+                Clientes = clientes.Select(c => new SelectListItem
+                {
+                    Value = c.Id.ToString(),
+                    Text = c.Nombre
+                }).ToList(),
+                Servicios = servicios.Select(s => new SelectListItem
+                {
+                    Value = s.Id.ToString(),
+                    Text = s.Nombre
+                }).ToList()
             };
 
             return View(viewModel);
-
-            ViewData["ClienteId"] = new SelectList(_context.Clientes, "Id", "Nombre");
-            ViewData["ServicioId"] = new SelectList(_context.Servicios, "Id", "Nombre");
-            return View();
-
         }
+
 
 
         // POST: Citas/Create
@@ -143,8 +146,7 @@ namespace SistemaAgendaCitas.Controllers
             ModelState.Remove("Cliente");
             ModelState.Remove("Servicio");
 
-            bool existeSolapamiento = await _context.Citas.AnyAsync(c =>
-                c.Fecha == viewModel.Fecha && c.Hora == viewModel.Hora);
+            bool existeSolapamiento = await _citaRepository.ExisteCitaEnFechaHoraAsync(viewModel.Fecha, viewModel.Hora);
 
             if (existeSolapamiento)
             {
@@ -164,8 +166,7 @@ namespace SistemaAgendaCitas.Controllers
                     Comentarios = viewModel.Comentarios
                 };
 
-                _context.Add(cita);
-                await _context.SaveChangesAsync();
+                await _citaRepository.AgregarAsync(cita);
 
                 _logger.LogInformation("Cita creada exitosamente con ID={Id}", cita.Id);
                 return RedirectToAction(nameof(Index));
@@ -173,19 +174,22 @@ namespace SistemaAgendaCitas.Controllers
 
             _logger.LogWarning("ModelState inválido al intentar crear cita.");
             // recargar combos
-            viewModel.Clientes = await _context.Clientes
+            var clientes = await _clienteRepository.ObtenerTodosAsync();
+            var servicios = await _servicioRepository.ObtenerTodosAsync();
+
+            viewModel.Clientes = clientes
                 .Select(c => new SelectListItem
                 {
                     Value = c.Id.ToString(),
                     Text = c.Nombre
-                }).ToListAsync();
+                }).ToList();
 
-            viewModel.Servicios = await _context.Servicios
+            viewModel.Servicios = servicios
                 .Select(s => new SelectListItem
                 {
                     Value = s.Id.ToString(),
                     Text = s.Nombre
-                }).ToListAsync();
+                }).ToList();
 
             return View(viewModel);
         }
@@ -199,10 +203,7 @@ namespace SistemaAgendaCitas.Controllers
         {
             if (id == null) return NotFound();
 
-            var cita = await _context.Citas
-    .Include(c => c.Cliente)
-    .Include(c => c.Servicio)
-    .FirstOrDefaultAsync(c => c.Id == id);
+            var cita = await _citaRepository.ObtenerPorIdAsync(id);
 
             if (cita == null) return NotFound();
 
@@ -237,17 +238,14 @@ namespace SistemaAgendaCitas.Controllers
 
             if (ModelState.IsValid)
             {
-                var cita = await _context.Citas.FindAsync(id);
+                var cita = await _citaRepository.BuscarPorIdAsync(id);
                 if (cita == null)
                 {
                     _logger.LogWarning("No se encontró la cita con ID={Id} para edición.", id);
                     return NotFound();
                 }
 
-                bool existeSolapamiento = await _context.Citas.AnyAsync(c =>
-                    c.Id != viewModel.Id &&
-                    c.Fecha == viewModel.Fecha &&
-                    c.Hora == viewModel.Hora);
+                bool existeSolapamiento = await _citaRepository.ExisteSolapamientoAsync(viewModel.Id, viewModel.Fecha, viewModel.Hora);
 
                 if (existeSolapamiento)
                 {
@@ -289,7 +287,7 @@ namespace SistemaAgendaCitas.Controllers
                         cita.Hora = viewModel.Hora;
                         cita.Comentarios = viewModel.Comentarios;
 
-                        await _context.SaveChangesAsync();
+                        await _citaRepository.ActualizarAsync(cita);
                         _logger.LogInformation("Cita ID={Id} editada correctamente.", id);
                         return RedirectToAction(nameof(Index));
                     }
@@ -298,10 +296,7 @@ namespace SistemaAgendaCitas.Controllers
 
             _logger.LogWarning("ModelState inválido al editar cita ID={Id}", viewModel.Id);
 
-            var citaCompleta = await _context.Citas
-                .Include(c => c.Cliente)
-                .Include(c => c.Servicio)
-                .FirstOrDefaultAsync(c => c.Id == viewModel.Id);
+            var citaCompleta = await _citaRepository.ObtenerPorIdAsync(viewModel.Id);
 
             if (citaCompleta != null)
             {
@@ -330,10 +325,7 @@ namespace SistemaAgendaCitas.Controllers
                 return NotFound();
             }
 
-            var cita = await _context.Citas
-                .Include(c => c.Cliente)
-                .Include(c => c.Servicio)
-                .FirstOrDefaultAsync(m => m.Id == id);
+            var cita = await _citaRepository.ObtenerPorIdAsync(id);
             if (cita == null)
             {
                 return NotFound();
@@ -349,11 +341,10 @@ namespace SistemaAgendaCitas.Controllers
         {
             try
             {
-                var cita = await _context.Citas.FindAsync(id);
+                var cita = await _citaRepository.BuscarPorIdAsync(id);
                 if (cita != null)
                 {
-                    _context.Citas.Remove(cita);
-                    await _context.SaveChangesAsync();
+                    await _citaRepository.EliminarAsync(id);
                     _logger.LogInformation("Cita eliminada correctamente. ID={Id}", id);
                 }
                 else
@@ -371,19 +362,16 @@ namespace SistemaAgendaCitas.Controllers
         }
 
 
-        private bool CitaExists(int id)
+        private async Task<bool> CitaExists(int id)
         {
-            return _context.Citas.Any(e => e.Id == id);
+            return await _citaRepository.ExistePorIdAsync(id);
         }
 
 
         [HttpGet]
         public async Task<IActionResult> CambiarEstado(int id)
         {
-            var cita = await _context.Citas
-                .Include(c => c.Cliente)
-                .Include(c => c.Servicio)
-                .FirstOrDefaultAsync(c => c.Id == id);
+            var cita = await _citaRepository.ObtenerPorIdAsync(id);
 
             if (cita == null) return NotFound();
 
@@ -409,7 +397,7 @@ namespace SistemaAgendaCitas.Controllers
                 return View(viewModel);
             }
 
-            var cita = await _context.Citas.FindAsync(viewModel.Id);
+            var cita = await _citaRepository.BuscarPorIdAsync(viewModel.Id);
             if (cita == null)
             {
                 _logger.LogWarning("No se encontró la cita con ID={Id} para cambiar estado", viewModel.Id);
@@ -441,7 +429,7 @@ namespace SistemaAgendaCitas.Controllers
             cita.Estado = viewModel.NuevoEstado;
             cita.FechaCambioEstado = DateTime.Now;
 
-            await _context.SaveChangesAsync();
+            await _citaRepository.ActualizarAsync(cita);
             _logger.LogInformation("Cita ID={Id} cambio de estado exitoso a {NuevoEstado}", viewModel.Id, viewModel.NuevoEstado);
             return RedirectToAction(nameof(Index));
         }
@@ -451,10 +439,7 @@ namespace SistemaAgendaCitas.Controllers
 
         private async Task CargarDatosEstadoCita(CambiarEstadoCitaViewModel viewModel)
         {
-            var citaOriginal = await _context.Citas
-                .Include(c => c.Cliente)
-                .Include(c => c.Servicio)
-                .FirstOrDefaultAsync(c => c.Id == viewModel.Id);
+            var citaOriginal = await _citaRepository.ObtenerPorIdAsync(viewModel.Id);
 
             if (citaOriginal != null)
             {
@@ -474,34 +459,28 @@ namespace SistemaAgendaCitas.Controllers
         [HttpGet]
         public JsonResult ObtenerCitas()
         {
-            var citas = _context.Citas
-                .Include(c => c.Cliente)
-                .Include(c => c.Servicio)
-
-
-                .Select(c => new {
-                    id = c.Id,
-                    title = c.Cliente.Nombre + " - " + c.Servicio.Nombre,
-                    start = c.Fecha.Add(c.Hora).ToString("s"), // formato ISO 8601
-                    allDay = false
-                })
-                .ToList();
+            var citas = _citaRepository.ObtenerCitasConClientesYServicios()
+             .Select(c => new {
+                 id = c.Id,
+                 title = c.Cliente.Nombre + " - " + c.Servicio.Nombre,
+                 start = c.Fecha.Add(c.Hora).ToString("s"),
+                 allDay = false
+             }).ToList();
 
 
             return Json(citas);
         }
 
         [HttpGet]
-        public IActionResult Reportes(DateTime? fechaInicio, DateTime? fechaFin)
+        public async Task<IActionResult> Reportes(DateTime? fechaInicio, DateTime? fechaFin)
+
         {
             // Si no se envían fechas, usar último mes
             fechaInicio ??= DateTime.Today.AddMonths(-1);
             fechaFin ??= DateTime.Today;
 
-            var citas = _context.Citas
-                .Include(c => c.Servicio)
-                .Where(c => c.Fecha >= fechaInicio && c.Fecha <= fechaFin)
-                .ToList();
+            var citas = await _citaRepository.ObtenerConServicioPorRangoFechaAsync(fechaInicio.Value, fechaFin.Value);
+
 
             var modelo = new ReporteCitasYServiciosViewModel
             {

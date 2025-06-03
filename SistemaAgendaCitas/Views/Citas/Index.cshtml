@@ -1,9 +1,11 @@
-﻿@model IEnumerable<SistemaAgendaCitas.Models.Entities.Cita>
+﻿@using SistemaAgendaCitas.Models.ViewModels
+@model IndexCitasViewModel
 
 @{
     ViewData["Title"] = "Index";
 }
-@if (TempData["Success"] != null)
+
+@if (TempData != null && TempData.ContainsKey("Success") && TempData["Success"] != null)
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
         @TempData["Success"]
@@ -11,75 +13,63 @@
     </div>
 }
 
-
 <h1>Gestión de Citas</h1>
+
 <p>
     <a asp-action="Calendario" class="btn btn-sm btn-warning">Ver vista Calendario</a>
 </p>
 <p>
     <a asp-action="Create" class="btn btn-sm btn-primary">Agregar nueva cita</a>
 </p>
-    <div class="card mb-4">
-        <div class="card-body">
-            <form method="get" class="row g-3">
-                <div class="col-md-3">
-                    <label>Fecha:</label>
-                    <input type="date" name="fecha" class="form-control" value="@(Context.Request.Query["fecha"])" />
-                </div>
-                <div class="col-md-3">
-                    <label>Cliente:</label>
-                    <select name="clienteId" class="form-control" asp-items="ViewBag.Clientes">
-                        <option value="">-- Todos --</option>
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label>Estado:</label>
-                    <select name="estado" class="form-control" asp-items="ViewBag.Estados">
-                        <option value="">-- Todos --</option>
-                    </select>
-                </div>
-                <div class="col-md-3 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary">Filtrar</button>
-                </div>
-            </form>
-        </div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label for="fecha">Fecha:</label>
+                <input type="date" name="fecha" class="form-control"
+                       value="@Model.Fecha?.ToString("yyyy-MM-dd")" />
+            </div>
+            <div class="col-md-3">
+                <label for="clienteId">Cliente:</label>
+                <select name="clienteId" class="form-control" asp-items="Model.Clientes">
+                    <option value="">-- Todos --</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="estado">Estado:</label>
+                <select name="estado" class="form-control" asp-items="Model.Estados">
+                    <option value="">-- Todos --</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary">Filtrar</button>
+            </div>
+        </form>
     </div>
-
-
+</div>
 
 <table class="table">
     <thead>
         <tr>
-            <th>
-                @Html.DisplayNameFor(model => model.Cliente)
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.Servicio)
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.Fecha)
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.Hora)
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.Estado)
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.Comentarios)
-            </th>
+            <th>Cliente</th>
+            <th>Servicio</th>
+            <th>Fecha</th>
+            <th>Hora</th>
+            <th>Estado</th>
+            <th>Comentarios</th>
             <th>Último Cambio Estado</th>
             <th></th>
         </tr>
     </thead>
     <tbody>
-        @foreach (var item in Model)
+        @foreach (var item in Model.Citas)
         {
             <tr>
                 <td>@item.Cliente.Nombre @item.Cliente.Apellido</td>
                 <td>@item.Servicio.Nombre</td>
                 <td>@item.Fecha.ToShortDateString()</td>
-                <td>@item.Hora</td>
+                <td>@item.Hora.ToString(@"hh\:mm")</td>
                 <td>@item.Estado</td>
                 <td>@item.Comentarios</td>
                 <td>@item.FechaCambioEstado?.ToString("g")</td>
@@ -89,8 +79,6 @@
                     <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-primary">Detalles</a> |
                     <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-sm btn-danger">Eliminar</a>
                 </td>
-                
-
             </tr>
         }
     </tbody>
