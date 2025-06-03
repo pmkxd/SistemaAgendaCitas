@@ -11,6 +11,15 @@
     </div>
 }
 
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        @TempData["Error"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+
 
 <h1>Gestión de Citas</h1>
 <p>
@@ -50,26 +59,15 @@
 <table class="table">
     <thead>
         <tr>
-            <th>
-                @Html.DisplayNameFor(model => model.Cliente)
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.Servicio)
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.Fecha)
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.Hora)
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.Estado)
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.Comentarios)
-            </th>
+            <th>@Html.DisplayNameFor(model => model.Cliente)</th>
+            <th>@Html.DisplayNameFor(model => model.Servicio)</th>
+            <th>@Html.DisplayNameFor(model => model.Fecha)</th>
+            <th>@Html.DisplayNameFor(model => model.Hora)</th>
+            <th>@Html.DisplayNameFor(model => model.Estado)</th>
+            <th>@Html.DisplayNameFor(model => model.Comentarios)</th>
             <th>Último Cambio Estado</th>
-            <th></th>
+            <th>Cambiar Estado</th> 
+            <th>Acciones</th> 
         </tr>
     </thead>
     <tbody>
@@ -83,15 +81,75 @@
                 <td>@item.Estado</td>
                 <td>@item.Comentarios</td>
                 <td>@item.FechaCambioEstado?.ToString("g")</td>
-                <td>
-                    <a asp-action="CambiarEstado" asp-route-id="@item.Id" class="btn btn-sm btn-warning">Cambiar Estado</a> |
-                    <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-warning">Editar</a> |
-                    <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-primary">Detalles</a> |
-                    <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-sm btn-danger">Eliminar</a>
-                </td>
-                
+
+  <!-- Columna: Cambiar Estado -->
+<td>
+    @if (item.Estado == EstadoCita.Pendiente)
+    {
+        <!-- Confirmar -->
+        <form asp-action="CambiarEstadoRapido" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@item.Id" />
+            <input type="hidden" name="nuevoEstado" value="@((int)EstadoCita.Confirmada)" />
+            <button type="submit" class="btn btn-sm btn-warning" title="Confirmar cita">
+                <i class="bi bi-check2-square"></i>
+            </button>
+        </form>
+
+        <!-- Completar -->
+        <form asp-action="CambiarEstadoRapido" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@item.Id" />
+            <input type="hidden" name="nuevoEstado" value="@((int)EstadoCita.Completada)" />
+            <button type="submit" class="btn btn-sm btn-success" title="Completar cita">
+                <i class="bi bi-check-circle"></i>
+            </button>
+        </form>
+
+        <!-- Cancelar -->
+        <form asp-action="CambiarEstadoRapido" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@item.Id" />
+            <input type="hidden" name="nuevoEstado" value="@((int)EstadoCita.Cancelada)" />
+            <button type="submit" class="btn btn-sm btn-secondary" title="Cancelar cita">
+                <i class="bi bi-x-circle"></i>
+            </button>
+        </form>
+    }
+    else if (item.Estado == EstadoCita.Confirmada)
+    {
+        <!-- Completar -->
+        <form asp-action="CambiarEstadoRapido" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@item.Id" />
+            <input type="hidden" name="nuevoEstado" value="@((int)EstadoCita.Completada)" />
+            <button type="submit" class="btn btn-sm btn-success" title="Completar cita">
+                <i class="bi bi-check-circle"></i>
+            </button>
+        </form>
+
+        <!-- Cancelar -->
+        <form asp-action="CambiarEstadoRapido" method="post" class="d-inline">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@item.Id" />
+            <input type="hidden" name="nuevoEstado" value="@((int)EstadoCita.Cancelada)" />
+            <button type="submit" class="btn btn-sm btn-secondary" title="Cancelar cita">
+                <i class="bi bi-x-circle"></i>
+            </button>
+        </form>
+    }
+</td>
+
+<!-- Columna: Acciones -->
+<td>
+    <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-warning">Editar</a>
+    <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-primary">Detalles</a>
+    <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-sm btn-danger">Eliminar</a>
+</td>
+
 
             </tr>
         }
     </tbody>
 </table>
+
