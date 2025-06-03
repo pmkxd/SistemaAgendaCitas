@@ -245,7 +245,9 @@ namespace SistemaAgendaCitas.Controllers
                 }
 
                 bool existeSolapamiento = await _context.Citas.AnyAsync(c =>
-                    c.Id != viewModel.Id && c.Fecha == viewModel.Fecha && c.Hora == viewModel.Hora);
+                    c.Id != viewModel.Id &&
+                    c.Fecha == viewModel.Fecha &&
+                    c.Hora == viewModel.Hora);
 
                 if (existeSolapamiento)
                 {
@@ -257,14 +259,22 @@ namespace SistemaAgendaCitas.Controllers
                     bool cambioEstado = cita.Estado != viewModel.Estado;
                     if (cambioEstado)
                     {
-                        bool puedeCancelar = cita.Estado == EstadoCita.Pendiente && viewModel.Estado == EstadoCita.Cancelada;
-                        bool puedeCompletar = (cita.Estado == EstadoCita.Pendiente || cita.Estado == EstadoCita.Confirmada)
-                            && viewModel.Estado == EstadoCita.Completada;
+                        bool puedeCancelar =
+                            (cita.Estado == EstadoCita.Pendiente || cita.Estado == EstadoCita.Confirmada) &&
+                            viewModel.Estado == EstadoCita.Cancelada;
 
-                        if (!puedeCancelar && !puedeCompletar)
+                        bool puedeCompletar =
+                            (cita.Estado == EstadoCita.Pendiente || cita.Estado == EstadoCita.Confirmada) &&
+                            viewModel.Estado == EstadoCita.Completada;
+
+                        bool puedeConfirmar =
+                            cita.Estado == EstadoCita.Pendiente &&
+                            viewModel.Estado == EstadoCita.Confirmada;
+
+                        if (!puedeCancelar && !puedeCompletar && !puedeConfirmar)
                         {
                             _logger.LogWarning("Cambio de estado inválido en cita ID={Id}: de {Actual} a {Nuevo}", id, cita.Estado, viewModel.Estado);
-                            ModelState.AddModelError("", "Solo puedes cancelar citas pendientes o completar citas pendientes/confirmadas.");
+                            ModelState.AddModelError("", "Solo puedes confirmar, cancelar o completar una cita según su estado actual.");
                         }
                         else
                         {
@@ -287,7 +297,7 @@ namespace SistemaAgendaCitas.Controllers
             }
 
             _logger.LogWarning("ModelState inválido al editar cita ID={Id}", viewModel.Id);
-            // recargar datos...
+
             var citaCompleta = await _context.Citas
                 .Include(c => c.Cliente)
                 .Include(c => c.Servicio)
@@ -303,6 +313,8 @@ namespace SistemaAgendaCitas.Controllers
 
             return View(viewModel);
         }
+
+
 
 
 
@@ -404,16 +416,24 @@ namespace SistemaAgendaCitas.Controllers
                 return NotFound();
             }
 
-            bool puedeCancelar = cita.Estado == EstadoCita.Pendiente && viewModel.NuevoEstado == EstadoCita.Cancelada;
-            bool puedeCompletar = (cita.Estado == EstadoCita.Pendiente || cita.Estado == EstadoCita.Confirmada)
-                && viewModel.NuevoEstado == EstadoCita.Completada;
+            bool puedeCancelar =
+                (cita.Estado == EstadoCita.Pendiente || cita.Estado == EstadoCita.Confirmada) &&
+                viewModel.NuevoEstado == EstadoCita.Cancelada;
 
-            if (!puedeCancelar && !puedeCompletar)
+            bool puedeCompletar =
+                (cita.Estado == EstadoCita.Pendiente || cita.Estado == EstadoCita.Confirmada) &&
+                viewModel.NuevoEstado == EstadoCita.Completada;
+
+            bool puedeConfirmar =
+                cita.Estado == EstadoCita.Pendiente &&
+                viewModel.NuevoEstado == EstadoCita.Confirmada;
+
+            if (!puedeCancelar && !puedeCompletar && !puedeConfirmar)
             {
                 _logger.LogWarning("Intento de cambio de estado inválido. ID={Id}, EstadoActual={Actual}, NuevoEstado={Nuevo}",
                     viewModel.Id, cita.Estado, viewModel.NuevoEstado);
 
-                ModelState.AddModelError("", "Solo puedes cancelar citas pendientes o completar citas pendientes/confirmadas.");
+                ModelState.AddModelError("", "Solo puedes confirmar, cancelar o completar una cita según su estado actual.");
                 await CargarDatosEstadoCita(viewModel);
                 return View(viewModel);
             }
@@ -425,6 +445,8 @@ namespace SistemaAgendaCitas.Controllers
             _logger.LogInformation("Cita ID={Id} cambio de estado exitoso a {NuevoEstado}", viewModel.Id, viewModel.NuevoEstado);
             return RedirectToAction(nameof(Index));
         }
+
+
 
 
         private async Task CargarDatosEstadoCita(CambiarEstadoCitaViewModel viewModel)
