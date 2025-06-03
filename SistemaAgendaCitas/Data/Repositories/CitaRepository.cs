@@ -98,4 +98,10 @@ public class CitaRepository : ICitaRepository
         return await _context.Citas
             .AnyAsync(c => c.ServicioId == servicioId && c.Estado == EstadoCita.Pendiente);
     }
+    public IQueryable<Cita> ObtenerCitasConClienteYServicio()
+    {
+        return _context.Citas
+            .Include(c => c.Cliente)
+            .Include(c => c.Servicio);
+    }
 }

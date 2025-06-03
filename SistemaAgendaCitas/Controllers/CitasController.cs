@@ -393,17 +393,7 @@ namespace SistemaAgendaCitas.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CambiarEstadoRapido(int id, EstadoCita nuevoEstado)
         {
-
-
-            if (!ModelState.IsValid)
-            {
-                _logger.LogWarning("ModelState inválido al cambiar estado de cita ID={Id}", viewModel.Id);
-                await CargarDatosEstadoCita(viewModel);
-                return View(viewModel);
-            }
-
-            var cita = await _citaRepository.BuscarPorIdAsync(viewModel.Id);
-
+            var cita = await _citaRepository.BuscarPorIdAsync(id);
             if (cita == null)
             {
                 TempData["Error"] = "No se encontró la cita.";
@@ -431,10 +421,10 @@ namespace SistemaAgendaCitas.Controllers
             cita.FechaCambioEstado = DateTime.Now;
 
             await _citaRepository.ActualizarAsync(cita);
-            _logger.LogInformation("Cita ID={Id} cambio de estado exitoso a {NuevoEstado}", viewModel.Id, viewModel.NuevoEstado);
-
+            TempData["Success"] = $"Cita marcada como {nuevoEstado}.";
             return RedirectToAction(nameof(Index));
         }
+
 
 
 
@@ -453,6 +443,7 @@ namespace SistemaAgendaCitas.Controllers
 
 
 
+
         public IActionResult Calendario()
         {
             return View();
@@ -461,15 +452,18 @@ namespace SistemaAgendaCitas.Controllers
         [HttpGet]
         public JsonResult ObtenerCitas()
         {
-
-            var citas = _citaRepository.ObtenerCitasConClientesYServicios()
-             .Select(c => new {
-                 id = c.Id,
-                 title = c.Cliente.Nombre + " - " + c.Servicio.Nombre,
-                 start = c.Fecha.Add(c.Hora).ToString("s"),
-                 allDay = false
-             }).ToList();
-
+            var citas = _citaRepository.ObtenerCitasConClienteYServicio()
+                .Select(c => new
+                {
+                    id = c.Id,
+                    title = $"{c.Cliente.Nombre} - {c.Servicio.Nombre}",
+                    start = c.Fecha.Add(c.Hora).ToString("yyyy-MM-ddTHH:mm:ss"),
+                    allDay = false,
+                    color = c.Estado == EstadoCita.Completada ? "#28a745" :
+                            c.Estado == EstadoCita.Cancelada ? "#dc3545" :
+                            c.Estado == EstadoCita.Confirmada ? "#ffc107" : "#0d6efd"
+                })
+                .ToList();
 
             return Json(citas);
         }

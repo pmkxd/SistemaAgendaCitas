@@ -20,4 +20,5 @@ public interface ICitaRepository
     Task<bool> ExistePorIdAsync(int id);
     Task<List<Cita>> ObtenerConServicioPorRangoFechaAsync(DateTime fechaInicio, DateTime fechaFin);
     Task<bool> ExisteCitaPendientePorServicioAsync(int servicioId);
+    IQueryable<Cita> ObtenerCitasConClienteYServicio();
 }
