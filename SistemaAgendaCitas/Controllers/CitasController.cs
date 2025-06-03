@@ -439,25 +439,28 @@ namespace SistemaAgendaCitas.Controllers
         {
             return View();
         }
+
         [HttpGet]
         public JsonResult ObtenerCitas()
         {
             var citas = _context.Citas
-                .Include(c => c.Cliente)
+                .Include(c => c.Cliente) 
                 .Include(c => c.Servicio)
-
-
                 .Select(c => new {
                     id = c.Id,
-                    title = c.Cliente.Nombre + " - " + c.Servicio.Nombre,
-                    start = c.Fecha.Add(c.Hora).ToString("s"), // formato ISO 8601
-                    allDay = false
+                    title = $"{c.Cliente.Nombre} - {c.Servicio.Nombre}",
+                    start = c.Fecha.Add(c.Hora).ToString("yyyy-MM-ddTHH:mm:ss"),
+                    allDay = false,
+                    color = c.Estado == EstadoCita.Completada ? "#28a745" :
+                            c.Estado == EstadoCita.Cancelada ? "#dc3545" :
+                            c.Estado == EstadoCita.Confirmada ? "#ffc107" :
+                            "#0d6efd"
                 })
                 .ToList();
 
-
             return Json(citas);
         }
+
 
         [HttpGet]
         public IActionResult Reportes(DateTime? fechaInicio, DateTime? fechaFin)
