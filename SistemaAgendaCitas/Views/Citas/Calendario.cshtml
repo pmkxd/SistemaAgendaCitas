@@ -1,35 +1,85 @@
 ﻿@{
     ViewData["Title"] = "Calendario de Citas";
-    Layout = "~/Views/Shared/_Layout.cshtml"; // Ajusta si usas otro layout
+    Layout = "~/Views/Shared/_Layout.cshtml";
 }
 
-<!-- Estilos de FullCalendar -->
-<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css" rel="stylesheet" />
-
-<h2>@ViewData["Title"]</h2>
-
-<div id='calendar'></div>
-
-<!-- Scripts de FullCalendar -->
+<!-- Estilos de FullCalendar GLOBAL -->
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet" />
+
+<h2 class="mb-4">@ViewData["Title"]</h2>
+
+<div class="mb-3">
+    <strong>Leyenda de Estados:</strong>
+    <span class="badge rounded-pill" style="background-color: #0d6efd;">Pendiente</span>
+    <span class="badge rounded-pill" style="background-color: #ffc107;">Confirmada</span>
+    <span class="badge rounded-pill" style="background-color: #28a745;">Completada</span>
+    <span class="badge rounded-pill" style="background-color: #dc3545;">Cancelada</span>
+</div>
+
+
+<div id="calendar"></div>
+
+<!-- Scripts de FullCalendar GLOBAL -->
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         var calendarEl = document.getElementById('calendar');
 
-            var calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
-        headerToolbar: {
-            left: 'prev,next today',
-            center: 'title',
-            right: 'dayGridMonth,timeGridWeek'
-        },
-        locale: 'es',
-        events: '/Citas/ObtenerCitas'
-    });
-
+        var calendar = new FullCalendar.Calendar(calendarEl, {
+            locale: 'es', // idioma español
+            initialView: 'dayGridMonth',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,listWeek'
+            },
+            buttonText: {
+                today: 'Hoy',
+                month: 'Mes',
+                week: 'Semana',
+                day: 'Día',
+                list: 'Agenda'
+            },
+            events: '/Citas/ObtenerCitas',
+            eventColor: '#0d6efd',
+            eventTextColor: '#fff',
+            nowIndicator: true,
+            displayEventTime: true,
+            eventTimeFormat: {
+                hour: '2-digit',
+                minute: '2-digit',
+                meridiem: false
+            }
+        });
 
         calendar.render();
     });
 </script>
+
+<style>
+    #calendar {
+        background-color: white;
+        padding: 1rem;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    .fc-toolbar-title {
+        font-size: 1.5rem;
+        font-weight: bold;
+    }
+
+    .fc .fc-button {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.6rem;
+    }
+
+    .fc .fc-daygrid-event {
+        font-size: 0.8rem;
+        padding: 2px 4px;
+        border-radius: 4px;
+    }
+</style>

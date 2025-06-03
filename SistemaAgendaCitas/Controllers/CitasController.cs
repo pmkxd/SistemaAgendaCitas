@@ -368,6 +368,8 @@ namespace SistemaAgendaCitas.Controllers
         }
 
 
+
+
         [HttpGet]
         public async Task<IActionResult> CambiarEstado(int id)
         {
@@ -386,10 +388,13 @@ namespace SistemaAgendaCitas.Controllers
             return View(viewModel);
         }
 
+
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CambiarEstado(CambiarEstadoCitaViewModel viewModel)
+        public async Task<IActionResult> CambiarEstadoRapido(int id, EstadoCita nuevoEstado)
         {
+
+
             if (!ModelState.IsValid)
             {
                 _logger.LogWarning("ModelState inválido al cambiar estado de cita ID={Id}", viewModel.Id);
@@ -398,42 +403,38 @@ namespace SistemaAgendaCitas.Controllers
             }
 
             var cita = await _citaRepository.BuscarPorIdAsync(viewModel.Id);
+
             if (cita == null)
             {
-                _logger.LogWarning("No se encontró la cita con ID={Id} para cambiar estado", viewModel.Id);
-                return NotFound();
+                TempData["Error"] = "No se encontró la cita.";
+                return RedirectToAction(nameof(Index));
             }
 
             bool puedeCancelar =
                 (cita.Estado == EstadoCita.Pendiente || cita.Estado == EstadoCita.Confirmada) &&
-                viewModel.NuevoEstado == EstadoCita.Cancelada;
+                nuevoEstado == EstadoCita.Cancelada;
 
             bool puedeCompletar =
                 (cita.Estado == EstadoCita.Pendiente || cita.Estado == EstadoCita.Confirmada) &&
-                viewModel.NuevoEstado == EstadoCita.Completada;
+                nuevoEstado == EstadoCita.Completada;
 
             bool puedeConfirmar =
-                cita.Estado == EstadoCita.Pendiente &&
-                viewModel.NuevoEstado == EstadoCita.Confirmada;
+                cita.Estado == EstadoCita.Pendiente && nuevoEstado == EstadoCita.Confirmada;
 
             if (!puedeCancelar && !puedeCompletar && !puedeConfirmar)
             {
-                _logger.LogWarning("Intento de cambio de estado inválido. ID={Id}, EstadoActual={Actual}, NuevoEstado={Nuevo}",
-                    viewModel.Id, cita.Estado, viewModel.NuevoEstado);
-
-                ModelState.AddModelError("", "Solo puedes confirmar, cancelar o completar una cita según su estado actual.");
-                await CargarDatosEstadoCita(viewModel);
-                return View(viewModel);
+                TempData["Error"] = $"No se puede cambiar el estado desde {cita.Estado} a {nuevoEstado}.";
+                return RedirectToAction(nameof(Index));
             }
 
-            cita.Estado = viewModel.NuevoEstado;
+            cita.Estado = nuevoEstado;
             cita.FechaCambioEstado = DateTime.Now;
 
             await _citaRepository.ActualizarAsync(cita);
             _logger.LogInformation("Cita ID={Id} cambio de estado exitoso a {NuevoEstado}", viewModel.Id, viewModel.NuevoEstado);
+
             return RedirectToAction(nameof(Index));
         }
-
 
 
 
@@ -456,9 +457,11 @@ namespace SistemaAgendaCitas.Controllers
         {
             return View();
         }
+
         [HttpGet]
         public JsonResult ObtenerCitas()
         {
+
             var citas = _citaRepository.ObtenerCitasConClientesYServicios()
              .Select(c => new {
                  id = c.Id,
@@ -470,6 +473,7 @@ namespace SistemaAgendaCitas.Controllers
 
             return Json(citas);
         }
+
 
         [HttpGet]
         public async Task<IActionResult> Reportes(DateTime? fechaInicio, DateTime? fechaFin)

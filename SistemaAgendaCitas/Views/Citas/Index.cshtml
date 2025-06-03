@@ -52,14 +52,16 @@
 <table class="table">
     <thead>
         <tr>
+
             <th>Cliente</th>
             <th>Servicio</th>
             <th>Fecha</th>
             <th>Hora</th>
             <th>Estado</th>
-            <th>Comentarios</th>
+
             <th>Último Cambio Estado</th>
-            <th></th>
+            <th>Cambiar Estado</th> 
+            <th>Acciones</th> 
         </tr>
     </thead>
     <tbody>
@@ -73,13 +75,17 @@
                 <td>@item.Estado</td>
                 <td>@item.Comentarios</td>
                 <td>@item.FechaCambioEstado?.ToString("g")</td>
+
+
                 <td>
                     <a asp-action="CambiarEstado" asp-route-id="@item.Id" class="btn btn-sm btn-warning">Cambiar Estado</a> |
                     <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-warning">Editar</a> |
                     <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-primary">Detalles</a> |
                     <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-sm btn-danger">Eliminar</a>
                 </td>
+
             </tr>
         }
     </tbody>
 </table>
+
